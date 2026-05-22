@@ -1,0 +1,30 @@
+// src/services/index.ts
+// Barrel file — single import location for all service types and functions.
+
+// --- Domain Types ---
+export type { Activity } from './activitiesService';
+export type { Student } from './studentsService';
+export type { GradeRecord } from './gradebookService';
+export type { SectionAnalytics, StudentAnalytics } from './analyticsService';
+export type { DailyEntry } from './homeworkService';
+export type { Thread, Message, Attachment, StudentSnapshot } from './messagesService';
+export type { ClassSlot, CalendarEvent } from './scheduleService';
+export type { Notification } from './notificationsService';
+export type { TeacherProfile } from './profileService';
+
+// --- ApiError ---
+export { ApiError } from './apiClient';
+
+// --- Service functions ---
+export * from './activitiesService';
+export * from './studentsService';
+// gradebookService: explicit re-export to avoid _resetMockStore collision
+export { getGrades, saveGrade } from './gradebookService';
+export * from './analyticsService';
+// homeworkService: explicit re-export to avoid _resetMockStore collision
+export { getEntries, createEntry, updateEntryScores, toggleParentVisibility } from './homeworkService';
+// messagesService: explicit re-export to avoid _resetMockStore collision
+export { THREADS_DATA, getThreads, sendMessage, markThreadRead, markAllRead, updateParentInfo } from './messagesService';
+export * from './scheduleService';
+export * from './notificationsService';
+export * from './profileService';

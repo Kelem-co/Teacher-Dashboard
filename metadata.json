@@ -1,0 +1,6 @@
+{
+  "name": "Teacher Dashboard - Ethio-Global Academy",
+  "description": "High-fidelity teacher dashboard with real-time session tracking, student performance metrics, and parent communication management.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
