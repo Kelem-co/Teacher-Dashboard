@@ -10,7 +10,9 @@ export type { DailyEntry } from './homeworkService';
 export type { Thread, Message, Attachment, StudentSnapshot } from './messagesService';
 export type { ClassSlot, CalendarEvent } from './scheduleService';
 export type { Notification } from './notificationsService';
-export type { TeacherProfile } from './profileService';
+export type { TeacherProfile, TeacherProfileUpdate } from './profileService';
+export type { TeacherSection, TeacherSubject } from './teacherSectionsService';
+export type { UserProfile } from './userProfileStore';
 
 // --- ApiError ---
 export { ApiError } from './apiClient';
@@ -28,3 +30,6 @@ export { THREADS_DATA, getThreads, sendMessage, markThreadRead, markAllRead, upd
 export * from './scheduleService';
 export * from './notificationsService';
 export * from './profileService';
+export * from './authService';
+export * from './teacherSectionsService';
+export * from './userProfileStore';

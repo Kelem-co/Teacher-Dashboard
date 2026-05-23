@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Users, 
   GraduationCap, 
@@ -33,7 +34,10 @@ import {
   FlaskConical,
   Hexagon,
   Shield,
-  Sparkles
+  Sparkles,
+  User,
+  Pencil,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import StudentsModule from '../components/StudentsModule';
@@ -45,8 +49,9 @@ import MessagesModule from '../components/MessagesModule';
 import { PerformanceDistribution, ParentEngagementChart } from '../components/AnalyticsCharts';
 import { THREADS_DATA } from '../components/MessagesModule';
 import type { Thread } from '../services';
-import { getStudents, getNotifications, markAllNotificationsRead, getStudentAnalytics, getTeacherProfile } from '../services';
-import type { Student, TeacherProfile, StudentAnalytics } from '../services';
+import { getStudents, getNotifications, markAllNotificationsRead, getStudentAnalytics, getTeacherProfile, logoutTeacher, getTeacherSections } from '../services';
+import { getAccessToken } from '../services/authStore';
+import type { Student, TeacherProfile, StudentAnalytics, TeacherSection } from '../services';
 import ScheduleModule, { OverviewScheduleWidget } from '../components/ScheduleModule';
 
 
@@ -182,6 +187,8 @@ const TimelineItem = ({
 // --- Main Dashboard ---
 
 export default function App() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState('Overview');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewDate, setViewDate] = useState(new Date()); 
@@ -189,41 +196,147 @@ export default function App() {
   const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [globalGrade, setGlobalGrade] = useState('Grade 7');
-  const [globalSection, setGlobalSection] = useState('Sec A');
+  const [globalGrade, setGlobalGrade] = useState('');
+  const [globalSection, setGlobalSection] = useState('');
   const [activeMessageThreadId, setActiveMessageThreadId] = useState<string | null>(null);
   const [messageThreads, setMessageThreads] = useState<Thread[]>(THREADS_DATA);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    setAuthChecked(true);
+  }, [router]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
+  }, [isProfileMenuOpen]);
 
   // Student and Attendance State
   const [students, setStudents] = useState<Student[]>([]);
 
   useEffect(() => {
+    if (!authChecked) return;
     getStudents().then(setStudents).catch(() => {});
-  }, []);
+  }, [authChecked]);
 
   const [notifications, setNotifications] = useState<import('../services').Notification[]>([]);
 
   useEffect(() => {
+    if (!authChecked) return;
     getNotifications().then(setNotifications).catch(() => {});
-  }, []);
+  }, [authChecked]);
 
   const [teacherProfile, setTeacherProfile] = useState<TeacherProfile | null>(null);
 
   useEffect(() => {
+    if (!authChecked) return;
     getTeacherProfile().then(setTeacherProfile).catch(() => {});
-  }, []);
+  }, [authChecked]);
 
   const [studentAnalytics, setStudentAnalytics] = useState<StudentAnalytics[]>([]);
 
   useEffect(() => {
+    if (!authChecked) return;
     getStudentAnalytics().then(setStudentAnalytics).catch(() => {});
-  }, []);
+  }, [authChecked]);
 
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [teacherSections, setTeacherSections] = useState<TeacherSection[]>([]);
+  const [isLoadingSections, setIsLoadingSections] = useState(true);
+  
+  useEffect(() => {
+    if (!authChecked) return;
+    setIsLoadingSections(true);
+    console.log("🔄 Loading teacher sections...");
+    getTeacherSections()
+      .then((sections) => {
+        console.log("✅ Teacher sections loaded:", sections);
+        setTeacherSections(sections);
+      })
+      .catch((error) => {
+        console.error("❌ Failed to load teacher sections:", error);
+      })
+      .finally(() => setIsLoadingSections(false));
+  }, [authChecked]);
+  
   const [attendance, setAttendance] = useState<Record<string, Record<string, 'present' | 'absent' | 'late'>>>({});
-  const [selectedSubject, setSelectedSubject] = useState('Mathematics');
+
+  const gradeOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    return teacherSections
+      .map((section) => section.gradeName)
+      .filter((grade) => {
+        if (seen.has(grade)) return false;
+        seen.add(grade);
+        return true;
+      });
+  }, [teacherSections]);
+
+  const sectionsForGrade = React.useMemo(() => {
+    if (!globalGrade) return [] as TeacherSection[];
+    return teacherSections.filter((section) => section.gradeName === globalGrade);
+  }, [globalGrade, teacherSections]);
+
+  const activeSection = React.useMemo(() => {
+    if (!sectionsForGrade.length) return undefined;
+    return sectionsForGrade.find((section) => section.sectionName === globalSection) || sectionsForGrade[0];
+  }, [globalSection, sectionsForGrade]);
+
+  const subjectOptions = React.useMemo(() => {
+    return activeSection?.subjects ?? [];
+  }, [activeSection]);
+
+  const activeSubject = React.useMemo(() => {
+    if (!subjectOptions.length) return null;
+    return subjectOptions.find((s) => s.subjectName === selectedSubject) || subjectOptions[0];
+  }, [selectedSubject, subjectOptions]);
+
+  // Initialize grade on first load
+  useEffect(() => {
+    if (isLoadingSections || teacherSections.length === 0) return;
+    if (!globalGrade && gradeOptions.length > 0) {
+      setGlobalGrade(gradeOptions[0]);
+    }
+  }, [isLoadingSections, teacherSections.length, gradeOptions, globalGrade]);
+
+  // Update section when grade changes
+  useEffect(() => {
+    if (sectionsForGrade.length === 0) return;
+    const nextSection = sectionsForGrade[0].sectionName;
+    if (globalSection !== nextSection && !sectionsForGrade.some((s) => s.sectionName === globalSection)) {
+      setGlobalSection(nextSection);
+    }
+  }, [globalSection, sectionsForGrade]);
+
+  // Update subject when section changes
+  useEffect(() => {
+    if (subjectOptions.length === 0) return;
+    const nextSubject = subjectOptions[0].subjectName;
+    if (selectedSubject !== nextSubject && !subjectOptions.some((s) => s.subjectName === selectedSubject)) {
+      setSelectedSubject(nextSubject);
+    }
+  }, [selectedSubject, subjectOptions]);
 
   const handleMarkAllNotificationsRead = async () => {
     setNotifications(await markAllNotificationsRead());
+  };
+
+  const handleLogout = () => {
+    logoutTeacher();
+    router.replace('/login');
   };
 
   const notificationCount = notifications.filter(n => !n.read).length;
@@ -323,6 +436,7 @@ export default function App() {
   };
 
   React.useEffect(() => {
+    if (!authChecked) return;
     const handleSendStudentSms = (e: Event) => {
       const customEvent = e as CustomEvent<{ studentId: string }>;
       const studentId = customEvent.detail.studentId;
@@ -378,7 +492,9 @@ export default function App() {
     };
     window.addEventListener('send_student_sms', handleSendStudentSms);
     return () => window.removeEventListener('send_student_sms', handleSendStudentSms);
-  }, [students, messageThreads, setMessageThreads, setActiveMessageThreadId, setActiveTab]);
+  }, [authChecked, students, messageThreads, setMessageThreads, setActiveMessageThreadId, setActiveTab]);
+
+  if (!authChecked) return null;
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-blue-100 selection:text-[#1A237E]">
@@ -418,14 +534,14 @@ export default function App() {
               {/* Grade Selector */}
               <div className="relative group">
                 <select 
-                  value={globalGrade}
-                  onChange={(e) => setGlobalGrade(e.target.value)}
-                  className="w-full appearance-none pl-3 pr-7 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-[#1A237E]/30 hover:bg-slate-50/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1A237E]/5 uppercase tracking-tighter shadow-xs"
-                >
-                  {['Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'].map(g => (
-                    <option key={g}>{g}</option>
-                  ))}
-                </select>
+                value={globalGrade}
+                onChange={(e) => setGlobalGrade(e.target.value)}
+                className="w-full appearance-none pl-3 pr-7 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-[#1A237E]/30 hover:bg-slate-50/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1A237E]/5 uppercase tracking-tighter shadow-xs"
+              >
+                {gradeOptions.map((grade) => (
+                  <option key={grade} value={grade}>{grade}</option>
+                ))}
+              </select>
                 <ChevronDown size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors" />
               </div>
 
@@ -436,8 +552,8 @@ export default function App() {
                   onChange={(e) => setGlobalSection(e.target.value)}
                   className="w-full appearance-none pl-3 pr-7 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 hover:border-[#1A237E]/30 hover:bg-slate-50/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1A237E]/5 uppercase tracking-tighter shadow-xs"
                 >
-                  {['Sec A', 'Sec B', 'Sec C'].map(s => (
-                    <option key={s}>{s}</option>
+                  {sectionsForGrade.map((section) => (
+                    <option key={section.sectionId} value={section.sectionName}>{section.sectionName}</option>
                   ))}
                 </select>
                 <ChevronDown size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors" />
@@ -447,18 +563,19 @@ export default function App() {
             {/* Subject Selector (Full Width High Priority) */}
             <div className="relative group">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1A237E] pointer-events-none z-10 opacity-70 group-hover:opacity-100 transition-opacity">
-                 {selectedSubject === 'Mathematics' && <Calculator size={13} strokeWidth={2.5} />}
-                 {selectedSubject === 'Physics' && <Atom size={13} strokeWidth={2.5} />}
-                 {selectedSubject === 'Chemistry' && <FlaskConical size={13} strokeWidth={2.5} />}
+                {selectedSubject.toLowerCase().includes('math') && <Calculator size={13} strokeWidth={2.5} />}
+                {selectedSubject.toLowerCase().includes('physics') && <Atom size={13} strokeWidth={2.5} />}
+                {selectedSubject.toLowerCase().includes('chem') && <FlaskConical size={13} strokeWidth={2.5} />}
+                {!selectedSubject && <BookOpen size={13} strokeWidth={2.5} />}
               </div>
               <select 
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 className="w-full appearance-none pl-9 pr-8 py-2.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-[#1A237E] hover:border-[#1A237E]/40 hover:bg-[#1A237E]/5 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1A237E]/10 uppercase tracking-tight shadow-sm"
               >
-                <option>Mathematics</option>
-                <option>Physics</option>
-                <option>Chemistry</option>
+                {subjectOptions.map((subject) => (
+                  <option key={subject.subjectId} value={subject.subjectName}>{subject.subjectName}</option>
+                ))}
               </select>
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none text-slate-400 group-hover:text-[#1A237E] transition-colors">
                 <ChevronDown size={12} />
@@ -487,16 +604,53 @@ export default function App() {
         </nav>
 
         {/* Footer User Profile */}
-        <div className="p-4 border-t border-slate-50">
-          <div className="flex items-center gap-3 p-2 bg-slate-50/50 rounded-xl">
+        <div className="p-4 border-t border-slate-50" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+            className="w-full flex items-center gap-3 p-2 bg-slate-50/50 rounded-xl hover:bg-slate-50 transition"
+          >
             <div className="w-10 h-10 rounded-full bg-[#1A237E] flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-white">
               {teacherProfile?.initials ?? 'SK'}
             </div>
-            <div>
+            <div className="flex-1 text-left">
               <p className="text-xs font-bold text-slate-900 uppercase tracking-tight">{teacherProfile?.name ?? 'Sara Kassa'}</p>
               <p className="text-[10px] font-medium text-slate-400">{teacherProfile?.role ?? 'Primary Teacher'}</p>
             </div>
-          </div>
+            <ChevronDown size={14} className="text-slate-400" />
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="mt-2 bg-white border border-slate-100 rounded-xl shadow-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  router.push('/profile');
+                }}
+                className="w-full px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <User size={14} /> View Profile
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  router.push('/profile?edit=true');
+                }}
+                className="w-full px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <Pencil size={14} /> Edit Profile
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full px-4 py-3 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+              >
+                <LogOut size={14} /> Log out
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -639,9 +793,28 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'Students' && <StudentsModule />}
-          {activeTab === 'Tasks' && <ActivitiesModule />}
-          {activeTab === 'Analytics' && <AnalyticsModule />}
+          {activeTab === 'Students' && (
+            <StudentsModule 
+              globalGrade={globalGrade}
+              globalSection={globalSection}
+              activeSection={activeSection}
+            />
+          )}
+          {activeTab === 'Tasks' && (
+            <ActivitiesModule 
+              globalGrade={globalGrade}
+              globalSection={globalSection}
+              selectedSubject={selectedSubject}
+              activeSection={activeSection}
+            />
+          )}
+          {activeTab === 'Analytics' && (
+            <AnalyticsModule 
+              globalGrade={globalGrade}
+              globalSection={globalSection}
+              activeSection={activeSection}
+            />
+          )}
           {activeTab === 'Homeworks' && (
             <HomeworksModule 
               globalGrade={globalGrade} 

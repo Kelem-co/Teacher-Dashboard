@@ -97,7 +97,13 @@ const Badge = ({ status }: { status: Student['status'] }) => {
 
 // --- StudentsModule Component ---
 
-const StudentsModule = () => {
+interface StudentsModuleProps {
+  globalGrade?: string;
+  globalSection?: string;
+  activeSection?: any;
+}
+
+const StudentsModule = ({ globalGrade, globalSection, activeSection }: StudentsModuleProps) => {
   const [students, setStudents] = useState<Student[]>(STUDENTS_MOCK);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
