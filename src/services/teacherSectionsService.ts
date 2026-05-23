@@ -1,7 +1,8 @@
 // src/services/teacherSectionsService.ts
 
 import { request } from "./apiClient";
-import { getTeacherId } from "./authStore";
+import { getTeacherId, setTeacherId } from "./authStore";
+import { getUserProfile } from "./userProfileStore";
 
 const IS_MOCK = !process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -34,6 +35,20 @@ type TeacherSectionApi = {
     subject_id: string;
     subject_name: string;
     subject_code?: string;
+  }>;
+};
+
+type SectionsResponseApi = {
+  count: number;
+  sections: TeacherSectionApi[];
+};
+
+type TeachersResponseApi = {
+  count: number;
+  results: Array<{
+    id: string;
+    user: string;
+    user_name: string;
   }>;
 };
 
@@ -89,9 +104,35 @@ export async function getTeacherSections(): Promise<TeacherSection[]> {
     return [...MOCK_SECTIONS];
   }
   
-  const teacherId = getTeacherId();
+  let teacherId = getTeacherId();
+  const userProfile = getUserProfile();
+
+  // Fix for cached invalid teacher_id: user UUID and teacher UUID are different.
+  // If they match, it means the old corrupted value is stuck in localStorage.
+  if (teacherId && userProfile && teacherId === userProfile.id) {
+    console.warn("⚠️ Found user UUID cached as teacher UUID. Clearing and refetching...");
+    localStorage.removeItem("teacher_id");
+    teacherId = null;
+  }
+
   if (!teacherId) {
-    console.error("❌ Teacher ID not found in localStorage or JWT token");
+    if (userProfile && userProfile.id) {
+      console.log(`📡 Fetching teacher ID for user: ${userProfile.id}`);
+      try {
+        const teachersData = await request<TeachersResponseApi>("GET", `/api/teachers/?user=${userProfile.id}`);
+        if (teachersData.results && teachersData.results.length > 0) {
+          teacherId = teachersData.results[0].id;
+          setTeacherId(teacherId);
+          console.log(`✅ Fetched and stored teacher ID: ${teacherId}`);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching teacher ID:", error);
+      }
+    }
+  }
+
+  if (!teacherId) {
+    console.error("❌ Teacher ID not found and could not be fetched");
     console.warn("⚠️ Using mock data as fallback");
     return [...MOCK_SECTIONS];
   }
@@ -100,10 +141,29 @@ export async function getTeacherSections(): Promise<TeacherSection[]> {
   console.log(`📡 Fetching teacher sections from: ${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`);
   
   try {
-    const data = await request<TeacherSectionApi[]>("GET", endpoint);
+    const data = await request<SectionsResponseApi>("GET", endpoint);
     console.log("✅ Successfully fetched teacher sections:", data);
-    return data.map(mapTeacherSection);
+    return (data.sections || []).map(mapTeacherSection);
   } catch (error) {
+    if (typeof window !== "undefined" && error && typeof error === "object" && "status" in error && error.status === 404) {
+      console.warn("⚠️ Teacher sections returned 404. Invalid teacher_id cached. Retrying...");
+      localStorage.removeItem("teacher_id");
+      
+      if (userProfile && userProfile.id) {
+        try {
+          const teachersData = await request<TeachersResponseApi>("GET", `/api/teachers/?user=${userProfile.id}`);
+          if (teachersData.results && teachersData.results.length > 0) {
+            const newTeacherId = teachersData.results[0].id;
+            setTeacherId(newTeacherId);
+            const newEndpoint = `/api/teachers/${newTeacherId}/sections/`;
+            const newData = await request<SectionsResponseApi>("GET", newEndpoint);
+            return (newData.sections || []).map(mapTeacherSection);
+          }
+        } catch (retryError) {
+          console.error("❌ Error fetching teacher sections on retry:", retryError);
+        }
+      }
+    }
     console.error("❌ Error fetching teacher sections:", error);
     console.warn("⚠️ Falling back to mock data");
     return [...MOCK_SECTIONS];

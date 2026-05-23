@@ -52,9 +52,6 @@ export function getTeacherId() {
     payload.teacher_id,
     payload.teacherId,
     payload.teacher,
-    payload.user_id,
-    payload.userId,
-    payload.sub,
   ];
   const teacherId = candidates.find((item) => typeof item === "string") as string | undefined;
   if (teacherId) {
