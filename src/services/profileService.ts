@@ -9,6 +9,7 @@ const IS_MOCK = !process.env.NEXT_PUBLIC_API_BASE_URL;
 // --- Types ---
 
 export interface TeacherProfile {
+  teacherId?: string;
   name: string;
   initials: string;
   role: string;
@@ -19,6 +20,9 @@ export interface TeacherProfile {
   bio?: string;
   specialization?: string;
   joiningDate?: string;
+  user?: string;
+  organization?: string;
+  branch?: string;
   qualifications: TeacherQualification[];
 }
 
@@ -47,6 +51,8 @@ type TeacherProfileApi = {
   bio?: string;
   specialization?: string;
   joining_date?: string;
+  organization?: string;
+  branch?: string;
   qualifications?: Array<{
     id: string;
     degree_name?: string;
@@ -92,6 +98,7 @@ function buildInitials(name?: string) {
 function mapTeacherProfile(api: TeacherProfileApi): TeacherProfile {
   const name = api.user_name || 'Teacher';
   return {
+    teacherId: api.id,
     name,
     initials: buildInitials(name),
     role: api.specialization ? `Teacher • ${api.specialization}` : 'Teacher',
@@ -102,6 +109,9 @@ function mapTeacherProfile(api: TeacherProfileApi): TeacherProfile {
     bio: api.bio,
     specialization: api.specialization,
     joiningDate: api.joining_date,
+    user: api.user,
+    organization: api.organization,
+    branch: api.branch,
     qualifications:
       api.qualifications?.map((qualification) => ({
         id: qualification.id,
@@ -116,31 +126,9 @@ function mapTeacherProfile(api: TeacherProfileApi): TeacherProfile {
 
 // --- Service functions ---
 
-/**
- * Returns the teacher's profile.
- * First tries to use the stored user profile from /api/users/me/
- * Falls back to fetching from /api/teachers/{id}/ if not available
- * In mock mode, returns the hardcoded profile matching page.tsx values.
- */
 export async function getTeacherProfile(): Promise<TeacherProfile> {
-  // Try to use stored user profile first
   const userProfile = getUserProfile();
   console.log('📋 getUserProfile() returned:', userProfile);
-  
-  if (userProfile) {
-    console.log('✅ Using stored user profile:', userProfile.name);
-    return {
-      name: userProfile.name,
-      initials: buildInitials(userProfile.name),
-      role: userProfile.role === 'TEACHER' ? 'Teacher' : userProfile.role,
-      grade: 'Grade 7',
-      section: 'Sec A',
-      email: userProfile.email,
-      qualifications: [],
-    };
-  }
-
-  console.log('⚠️ No stored user profile found');
 
   // Fall back to API call
   if (IS_MOCK) {
@@ -148,14 +136,80 @@ export async function getTeacherProfile(): Promise<TeacherProfile> {
     return { ...HARDCODED_PROFILE };
   }
   
-  const teacherId = getTeacherId();
+  let teacherId = getTeacherId();
+
+  if (teacherId && userProfile && teacherId === userProfile.id) {
+    console.warn('⚠️ Found user UUID cached as teacher UUID. Clearing and refetching...');
+    localStorage.removeItem('teacher_id');
+    teacherId = null;
+  }
+
   if (!teacherId) {
+    if (userProfile && userProfile.id) {
+      try {
+        const teachersData = await request<{ count: number; results: Array<{ id: string }> }>(
+          'GET',
+          `/api/teachers/?user=${userProfile.id}`
+        );
+        if (teachersData.results && teachersData.results.length > 0) {
+          teacherId = teachersData.results[0].id;
+          import('./authStore').then((m) => m.setTeacherId(teacherId!));
+        }
+      } catch (error) {
+        console.error('❌ Error fetching teacher ID:', error);
+      }
+    }
+  }
+
+  if (!teacherId) {
+    if (userProfile) {
+      console.log('⚠️ Teacher ID not found, but user profile exists. Returning partial profile.');
+      return {
+        name: userProfile.name,
+        initials: buildInitials(userProfile.name),
+        role: userProfile.role === 'TEACHER' ? 'Teacher' : userProfile.role,
+        grade: 'Grade 7',
+        section: 'Sec A',
+        email: userProfile.email,
+        qualifications: [],
+      };
+    }
     throw new Error('Teacher account not found. Please sign in again.');
   }
+
   try {
     const data = await request<TeacherProfileApi>('GET', `/api/teachers/${teacherId}/`);
-    return mapTeacherProfile(data);
+    const mapped = mapTeacherProfile(data);
+    
+    // If API didn't return name/email, fallback to user profile
+    if (!data.user_name && userProfile) {
+      mapped.name = userProfile.name;
+      mapped.initials = buildInitials(userProfile.name);
+    }
+    if (!data.user_email && userProfile) {
+      mapped.email = userProfile.email;
+    }
+    
+    return mapped;
   } catch (error) {
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
+      console.warn('⚠️ Teacher profile returned 404. Clearing cache...');
+      localStorage.removeItem('teacher_id');
+    }
+    
+    if (userProfile) {
+      console.warn('⚠️ Failed to fetch teacher profile from API, returning partial profile from userProfile');
+      return {
+        name: userProfile.name,
+        initials: buildInitials(userProfile.name),
+        role: userProfile.role === 'TEACHER' ? 'Teacher' : userProfile.role,
+        grade: 'Grade 7',
+        section: 'Sec A',
+        email: userProfile.email,
+        qualifications: [],
+      };
+    }
+    
     console.warn('⚠️ Failed to fetch teacher profile from API, using hardcoded profile');
     return { ...HARDCODED_PROFILE };
   }
@@ -201,3 +255,39 @@ export async function updateTeacherProfile(update: TeacherProfileUpdate): Promis
     throw error;
   }
 }
+
+export async function addTeacherQualification(
+  qualification: Omit<TeacherQualification, 'id'>,
+  teacherProfile: { teacherId: string; organizationId?: string }
+): Promise<TeacherQualification> {
+  const { teacherId, organizationId } = teacherProfile;
+
+  if (IS_MOCK) {
+    const newQual = { ...qualification, id: `QUAL-${Date.now()}` };
+    HARDCODED_PROFILE.qualifications.push(newQual);
+    return newQual;
+  }
+
+  const payload: Record<string, string> = { teacher: teacherId };
+  if (organizationId) payload.organization = organizationId;
+  if (qualification.degreeName) payload.degree_name = qualification.degreeName;
+  if (qualification.institution) payload.institution = qualification.institution;
+  if (qualification.fieldOfStudy) payload.field_of_study = qualification.fieldOfStudy;
+  if (qualification.completionDate) payload.completion_date = qualification.completionDate;
+
+  try {
+    const data = await request<any>('POST', '/api/teacher-qualifications/', payload);
+    return {
+      id: data.id,
+      degreeName: data.degree_name,
+      institution: data.institution,
+      fieldOfStudy: data.field_of_study,
+      completionDate: data.completion_date,
+      certificateCopy: data.certificate_copy,
+    };
+  } catch (error) {
+    console.error('❌ Failed to add teacher qualification:', error);
+    throw error;
+  }
+}
+
