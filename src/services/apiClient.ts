@@ -17,9 +17,15 @@ export class ApiError extends Error {
   }
 }
 
-import { getAccessToken, getRefreshToken, setTokens, decodeJwtPayload } from './authStore';
+import {
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  clearTokens,
+  decodeJwtPayload,
+} from "./authStore";
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type RequestOptions = {
   skipAuth?: boolean;
@@ -44,24 +50,24 @@ async function refreshAccessToken(): Promise<string | null> {
     try {
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
-        console.warn('⚠️ No refresh token available');
+        console.warn("⚠️ No refresh token available");
         return null;
       }
 
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
       if (!baseUrl) {
-        console.warn('⚠️ API base URL not configured');
+        console.warn("⚠️ API base URL not configured");
         return null;
       }
 
-      const url = baseUrl + '/auth/jwt/refresh/';
+      const url = baseUrl + "/auth/jwt/refresh/";
       console.log(`🔄 Attempting to refresh access token from: ${url}`);
 
       const res = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({ refresh: refreshToken }),
       });
@@ -76,11 +82,11 @@ async function refreshAccessToken(): Promise<string | null> {
       const newRefreshToken = data.refresh || refreshToken;
 
       setTokens(newAccessToken, newRefreshToken);
-      console.log('✅ Access token refreshed successfully');
+      console.log("✅ Access token refreshed successfully");
 
       return newAccessToken;
     } catch (error) {
-      console.error('❌ Token refresh error:', error);
+      console.error("❌ Token refresh error:", error);
       return null;
     } finally {
       isRefreshing = false;
@@ -106,22 +112,22 @@ export async function request<T>(
   method: HttpMethod,
   path: string,
   body?: unknown,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<T> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   if (!baseUrl) {
     // Mock mode — service modules should never reach this path; they
     // return mock data directly before calling request().
-    throw new Error('Mock mode: use service Mock Adapter directly');
+    throw new Error("Mock mode: use service Mock Adapter directly");
   }
 
   const url = baseUrl + path;
   console.log(`📡 [${method}] ${url}`);
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
+    "Content-Type": "application/json",
+    Accept: "application/json",
   };
 
   if (!options.skipAuth) {
@@ -143,7 +149,7 @@ export async function request<T>(
     headers,
   };
 
-  if (body !== undefined && method !== 'GET' && method !== 'DELETE') {
+  if (body !== undefined && method !== "GET" && method !== "DELETE") {
     init.body = JSON.stringify(body);
   }
 
@@ -153,23 +159,31 @@ export async function request<T>(
 
     // Handle 401 Unauthorized - try to refresh token and retry
     if (res.status === 401 && !options.skipAuth) {
-      console.log('🔄 Received 401, attempting to refresh token...');
+      console.log("🔄 Received 401, attempting to refresh token...");
       const newToken = await refreshAccessToken();
-      
+
       if (newToken) {
-        console.log('🔄 Retrying request with new token...');
+        console.log("🔄 Retrying request with new token...");
         // Update headers with new token
         headers.Authorization = `Bearer ${newToken}`;
         const retryInit: RequestInit = {
           method,
           headers,
         };
-        if (body !== undefined && method !== 'GET' && method !== 'DELETE') {
+        if (body !== undefined && method !== "GET" && method !== "DELETE") {
           retryInit.body = JSON.stringify(body);
         }
         res = await fetch(url, retryInit);
         console.log(`📊 Retry response status: ${res.status}`);
+      } else {
+        clearTokens();
+        throw new ApiError("Session expired. Please sign in again.", 401);
       }
+    }
+
+    if (res.status === 401 && !options.skipAuth) {
+      clearTokens();
+      throw new ApiError("Session expired. Please sign in again.", 401);
     }
 
     if (!res.ok) {
@@ -183,13 +197,17 @@ export async function request<T>(
       }
 
       const trimmed = message?.trim() || "";
-      const looksLikeHtml = trimmed.startsWith("<!DOCTYPE html>") || trimmed.includes("<html");
+      const looksLikeHtml =
+        trimmed.startsWith("<!DOCTYPE html>") || trimmed.includes("<html");
       if (looksLikeHtml) {
         message = "Request failed. Please try again or contact support.";
       }
 
       console.error(`❌ HTTP Error ${res.status}: ${message}`);
-      throw new ApiError(message || res.statusText || `HTTP ${res.status}`, res.status);
+      throw new ApiError(
+        message || res.statusText || `HTTP ${res.status}`,
+        res.status,
+      );
     }
 
     // Parse JSON response.
@@ -200,8 +218,8 @@ export async function request<T>(
     } catch (parseErr) {
       console.error(`❌ JSON parse error:`, parseErr);
       throw new ApiError(
-        (parseErr as Error).message || 'Failed to parse JSON response',
-        0
+        (parseErr as Error).message || "Failed to parse JSON response",
+        0,
       );
     }
   } catch (err) {
@@ -211,6 +229,6 @@ export async function request<T>(
     // Wrap any other error (network timeout, DNS failure, etc.) as an
     // ApiError with status 0.
     console.error(`❌ Network error:`, err);
-    throw new ApiError((err as Error).message || 'Network error', 0);
+    throw new ApiError((err as Error).message || "Network error", 0);
   }
 }

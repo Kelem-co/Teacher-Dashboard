@@ -4,6 +4,8 @@ const ACCESS_KEY = "teacher_access_token";
 const REFRESH_KEY = "teacher_refresh_token";
 const TEACHER_ID_KEY = "teacher_id";
 const ROLE_KEY = "teacher_role";
+const TEACHER_ORG_KEY = "teacher_organization_id";
+const TEACHER_BRANCH_KEY = "teacher_branch_id";
 
 export type JwtPayload = Record<string, unknown>;
 
@@ -33,6 +35,8 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(TEACHER_ID_KEY);
   localStorage.removeItem(ROLE_KEY);
+  localStorage.removeItem(TEACHER_ORG_KEY);
+  localStorage.removeItem(TEACHER_BRANCH_KEY);
 }
 
 export function setTeacherId(teacherId: string) {
@@ -69,6 +73,26 @@ export function setTeacherRole(role: string) {
 export function getTeacherRole() {
   if (!canUseStorage()) return null;
   return localStorage.getItem(ROLE_KEY);
+}
+
+export function setTeacherOrganization(orgId: string) {
+  if (!canUseStorage()) return;
+  localStorage.setItem(TEACHER_ORG_KEY, orgId);
+}
+
+export function getTeacherOrganization(): string | null {
+  if (!canUseStorage()) return null;
+  return localStorage.getItem(TEACHER_ORG_KEY);
+}
+
+export function setTeacherBranch(branchId: string) {
+  if (!canUseStorage()) return;
+  localStorage.setItem(TEACHER_BRANCH_KEY, branchId);
+}
+
+export function getTeacherBranch(): string | null {
+  if (!canUseStorage()) return null;
+  return localStorage.getItem(TEACHER_BRANCH_KEY);
 }
 
 export function decodeJwtPayload(token: string): JwtPayload | null {

@@ -42,6 +42,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import StudentsModule from '../components/StudentsModule';
 import ActivitiesModule from '../components/ActivitiesModule';
+import TasksModule from '../components/TasksModule';
 import GradebookModule from '../components/GradebookModule';
 import AnalyticsModule from '../components/AnalyticsModule';
 import HomeworksModule from '../components/HomeworksModule';
@@ -801,11 +802,9 @@ export default function App() {
             />
           )}
           {activeTab === 'Tasks' && (
-            <ActivitiesModule 
-              globalGrade={globalGrade}
-              globalSection={globalSection}
-              selectedSubject={selectedSubject}
+            <TasksModule 
               activeSection={activeSection}
+              selectedSubject={selectedSubject}
             />
           )}
           {activeTab === 'Analytics' && (
