@@ -312,7 +312,9 @@ const StudentsModule = ({
   const totalStudents = students.length;
   const activeStudents = students.filter((s) => s.status === "Active").length;
   const pendingStudents = students.filter((s) => s.status === "Pending").length;
-  const withdrawnStudents = students.filter((s) => s.status === "Withdrawn").length;
+  const withdrawnStudents = students.filter(
+    (s) => s.status === "Withdrawn",
+  ).length;
 
   const handleRowClick = (student: Student) => {
     setSelectedStudent(student);
@@ -401,109 +403,109 @@ const StudentsModule = ({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="hidden sm:table-cell px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
-                  Student ID
-                </th>
-                <th className="sticky left-0 z-10 bg-slate-50/50 px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
-                  Name
-                </th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
-                  Status
-                </th>
-                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStudents.map((student) => (
-                <tr
-                  key={student.id}
-                  onClick={() => handleRowClick(student)}
-                  className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer group"
-                >
-                  <td className="hidden sm:table-cell px-6 py-4">
-                    <span className="text-[11px] font-mono font-medium text-slate-400 tracking-tight">
-                      {student.id}
-                    </span>
-                  </td>
-                  <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 px-6 py-4 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0 ${
-                          [
-                            "bg-indigo-500",
-                            "bg-emerald-500",
-                            "bg-amber-500",
-                            "bg-rose-500",
-                            "bg-blue-500",
-                          ][student.name.length % 5]
-                        }`}
-                      >
-                        {student.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                          {student.name}
-                        </span>
-                        <span className="md:hidden text-[10px] text-slate-400 font-medium">
-                          {student.grade} • Sec {student.section}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <Badge status={student.status} />
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditName(student.name);
-                          setEditGrade(student.grade);
-                          setEditSection(student.section);
-                          setEditStatus(student.status);
-                          setEditParentName(student.parentName);
-                          setEditParentPhone(student.parentPhone);
-                          setEditParentEmail(student.parentEmail);
-                          setEditParentLinked(student.parentLinked);
-                          setSelectedStudent(student);
-                          setIsEditModalOpen(true);
-                        }}
-                        className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-[#1A237E] transition-all cursor-pointer"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-[#1A237E] transition-all">
-                        <Eye size={14} />
-                      </button>
-                    </div>
-                  </td>
+                  <th className="hidden sm:table-cell px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
+                    Student ID
+                  </th>
+                  <th className="sticky left-0 z-10 bg-slate-50/50 px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                    Name
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredStudents.map((student) => (
+                  <tr
+                    key={student.id}
+                    onClick={() => handleRowClick(student)}
+                    className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer group"
+                  >
+                    <td className="hidden sm:table-cell px-6 py-4">
+                      <span className="text-[11px] font-mono font-medium text-slate-400 tracking-tight">
+                        {student.id}
+                      </span>
+                    </td>
+                    <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 px-6 py-4 shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0 ${
+                            [
+                              "bg-indigo-500",
+                              "bg-emerald-500",
+                              "bg-amber-500",
+                              "bg-rose-500",
+                              "bg-blue-500",
+                            ][student.name.length % 5]
+                          }`}
+                        >
+                          {student.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                            {student.name}
+                          </span>
+                          <span className="md:hidden text-[10px] text-slate-400 font-medium">
+                            {student.grade} • Sec {student.section}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge status={student.status} />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditName(student.name);
+                            setEditGrade(student.grade);
+                            setEditSection(student.section);
+                            setEditStatus(student.status);
+                            setEditParentName(student.parentName);
+                            setEditParentPhone(student.parentPhone);
+                            setEditParentEmail(student.parentEmail);
+                            setEditParentLinked(student.parentLinked);
+                            setSelectedStudent(student);
+                            setIsEditModalOpen(true);
+                          }}
+                          className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-[#1A237E] transition-all cursor-pointer"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg text-slate-400 hover:text-[#1A237E] transition-all">
+                          <Eye size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Pagination */}
-        <div className="px-6 py-4 bg-slate-50/30 flex items-center justify-between border-t border-slate-100">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-            Showing 1–{filteredStudents.length} of {totalStudents} students
-          </p>
-          <div className="flex gap-2">
-            <button className="p-1.5 rounded-lg border border-slate-100 bg-white text-slate-400 hover:text-slate-600 disabled:opacity-50 transition-colors">
-              <ChevronLeft size={16} />
-            </button>
-            <button className="p-1.5 rounded-lg border border-slate-100 bg-white text-slate-400 hover:text-slate-600 transition-colors">
-              <ChevronRight size={16} />
-            </button>
+          {/* Pagination */}
+          <div className="px-6 py-4 bg-slate-50/30 flex items-center justify-between border-t border-slate-100">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+              Showing 1–{filteredStudents.length} of {totalStudents} students
+            </p>
+            <div className="flex gap-2">
+              <button className="p-1.5 rounded-lg border border-slate-100 bg-white text-slate-400 hover:text-slate-600 disabled:opacity-50 transition-colors">
+                <ChevronLeft size={16} />
+              </button>
+              <button className="p-1.5 rounded-lg border border-slate-100 bg-white text-slate-400 hover:text-slate-600 transition-colors">
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* 4. Student Detail Side Sheet */}

@@ -379,6 +379,38 @@ export async function getAssessmentsForContext(
   });
 }
 
+/**
+ * Get homeworks (task_type=HOMEWORK) for a given context (section/subject)
+ * Fetches all assessments and filters to HOMEWORK only client-side
+ */
+export async function getHomeworksForContext(
+  context?: TeacherAssignmentContext,
+): Promise<Assessment[]> {
+  if (IS_MOCK) return MOCK_ASSESSMENTS.filter((a) => a.taskType === "HOMEWORK");
+
+  if (!context) return [];
+
+  const teacherId = await resolveTeacherId();
+
+  console.group("📖 getHomeworksForContext");
+  console.log("Teacher ID:", teacherId);
+  console.log("Section ID:", context.sectionId);
+  console.log("Subject ID:", context.subjectId);
+  console.groupEnd();
+
+  if (!teacherId) return [];
+
+  // Fetch all assessments without taskType filter, then filter client-side
+  const allAssessments = await getAssessments({
+    teacherId,
+    sectionId: context.sectionId,
+    subjectId: context.subjectId,
+  });
+
+  // Filter to only HOMEWORK tasks client-side
+  return allAssessments.filter((a) => a.taskType === "HOMEWORK");
+}
+
 export async function createAssessment(
   payload: AssessmentCreate,
   context?: TeacherAssignmentContext,

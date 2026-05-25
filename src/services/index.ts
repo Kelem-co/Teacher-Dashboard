@@ -10,6 +10,7 @@ export type {
 } from "./studentsService";
 export type { GradeRecord } from "./gradebookService";
 export type { SectionAnalytics, StudentAnalytics } from "./analyticsService";
+export type { Assessment, AssessmentCreate } from "./assessmentsService";
 export type { DailyEntry } from "./homeworkService";
 export type {
   Thread,
@@ -29,6 +30,7 @@ export { ApiError } from "./apiClient";
 // --- Service functions ---
 export * from "./activitiesService";
 export * from "./studentsService";
+export * from "./assessmentsService";
 // gradebookService: explicit re-export to avoid _resetMockStore collision
 export { getGrades, saveGrade } from "./gradebookService";
 export * from "./analyticsService";

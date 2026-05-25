@@ -329,7 +329,7 @@ export async function getStudentsBySectionId(
     const params = new URLSearchParams();
     params.set("section", sectionId);
     if (academicYear) params.set("academic_year", academicYear);
-    params.set("status", "ACTIVE"); // Only fetch active students
+    // params.set("status", "ACTIVE"); // Only fetch active students
 
     const query = params.toString();
     const endpoint = `/api/students/by-section/?${query}`;

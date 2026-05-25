@@ -595,14 +595,19 @@ export default function TasksModule({
     setAssessments((prev) => prev.filter((a) => a.id !== id));
 
   const filtered = assessments.filter((a) => {
+    if (a.taskType === "HOMEWORK") return false; // Homeworks are in dedicated tab
     if (filterType !== "ALL" && a.taskType !== filterType) return false;
     if (filterStatus !== "ALL" && a.status !== filterStatus) return false;
     return true;
   });
 
   const counts = React.useMemo(() => {
-    const c: Record<string, number> = { ALL: assessments.length };
-    for (const a of assessments) {
+    // Filter out homeworks from counts (they are in their own module)
+    const nonHomeworkAssessments = assessments.filter(
+      (a) => a.taskType !== "HOMEWORK",
+    );
+    const c: Record<string, number> = { ALL: nonHomeworkAssessments.length };
+    for (const a of nonHomeworkAssessments) {
       c[a.taskType] = (c[a.taskType] ?? 0) + 1;
       c[a.status] = (c[a.status] ?? 0) + 1;
     }
@@ -616,8 +621,7 @@ export default function TasksModule({
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Tasks</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {assessments.length} assessment{assessments.length !== 1 ? "s" : ""}{" "}
-            total
+            {filtered.length} task{filtered.length !== 1 ? "s" : ""} total
           </p>
         </div>
         <button
