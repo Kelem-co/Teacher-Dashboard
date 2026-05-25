@@ -74,6 +74,9 @@ type AssessmentFilters = {
   organizationId?: string;
   branchId?: string;
   teacherAssignmentId?: string;
+  teacherId?: string;
+  sectionId?: string;
+  subjectId?: string;
   taskType?: TaskType;
   status?: TaskStatus;
   search?: string;
@@ -194,25 +197,6 @@ function normalizeAssessmentList(
     return [data as AssessmentApi];
   }
   return [];
-}
-
-async function resolveTeacherAssignmentId(
-  context?: TeacherAssignmentContext,
-): Promise<string | undefined> {
-  if (!context) return undefined;
-  const teacherId = await resolveTeacherId();
-  if (!teacherId) return undefined;
-
-  try {
-    const assignmentsData = await request<{ results: { id: string }[] }>(
-      "GET",
-      `/api/teacher-assignments/?teacher=${teacherId}&section=${context.sectionId}&subject=${context.subjectId}`,
-    );
-    return assignmentsData.results?.[0]?.id;
-  } catch (error) {
-    console.error("❌ Failed to fetch teacher assignments:", error);
-    return undefined;
-  }
 }
 
 async function resolveTeacherId(): Promise<string | null> {
@@ -340,13 +324,34 @@ export async function getAssessments(
   if (filters.branchId) params.set("branch", filters.branchId);
   if (filters.teacherAssignmentId)
     params.set("teacher_assignment", filters.teacherAssignmentId);
+  if (filters.teacherId) params.set("teacher", filters.teacherId);
+  if (filters.sectionId) params.set("section", filters.sectionId);
+  if (filters.subjectId) params.set("subject", filters.subjectId);
   if (filters.taskType) params.set("task_type", filters.taskType);
   if (filters.status) params.set("status", filters.status);
   if (filters.search) params.set("search", filters.search);
 
   const query = params.toString();
   const endpoint = query ? `/api/assessments/?${query}` : "/api/assessments/";
+
+  console.group("� Assessment Request");
+  console.log("Endpoint:", endpoint);
+  console.log("Query Params:", {
+    teacher: filters.teacherId,
+    section: filters.sectionId,
+    subject: filters.subjectId,
+    organizationId: filters.organizationId,
+    branchId: filters.branchId,
+    teacherAssignmentId: filters.teacherAssignmentId,
+    taskType: filters.taskType,
+    status: filters.status,
+  });
+
   const data = await request<AssessmentListApi>("GET", endpoint);
+
+  console.log("Response:", data);
+  console.groupEnd();
+
   return normalizeAssessmentList(data).map(mapAssessment);
 }
 
@@ -355,17 +360,22 @@ export async function getAssessmentsForContext(
 ): Promise<Assessment[]> {
   if (IS_MOCK) return [...MOCK_ASSESSMENTS];
 
-  const resolved = await ensureTeacherOrgBranch();
-  const teacherAssignmentId = await resolveTeacherAssignmentId(context);
+  if (!context) return [];
 
-  if (!teacherAssignmentId) {
-    return [];
-  }
+  const teacherId = await resolveTeacherId();
+
+  console.group("🔍 getAssessmentsForContext");
+  console.log("Teacher ID:", teacherId);
+  console.log("Section ID:", context.sectionId);
+  console.log("Subject ID:", context.subjectId);
+  console.groupEnd();
+
+  if (!teacherId) return [];
 
   return getAssessments({
-    organizationId: resolved.organizationId,
-    branchId: resolved.branchId,
-    teacherAssignmentId,
+    teacherId,
+    sectionId: context.sectionId,
+    subjectId: context.subjectId,
   });
 }
 

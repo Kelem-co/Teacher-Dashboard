@@ -16,6 +16,11 @@ export type JwtLoginResponse = {
   refresh: string;
 };
 
+export type CompleteInvitationResponse = {
+  detail?: string;
+  message?: string;
+};
+
 type AuthUserResponse = {
   id: string;
   name?: string;
@@ -132,6 +137,23 @@ export async function loginTeacher(email: string, password: string) {
   setTeacherId(teacherId);
 
   return { ...data, teacherId, role };
+}
+
+export async function completeTeacherInvitation(
+  uid: string,
+  token: string,
+  newPassword: string,
+): Promise<CompleteInvitationResponse> {
+  return request<CompleteInvitationResponse>(
+    "POST",
+    "/api/teachers/complete-invitation/",
+    {
+      uid,
+      token,
+      new_password: newPassword,
+    },
+    { skipAuth: true },
+  );
 }
 
 export function logoutTeacher() {

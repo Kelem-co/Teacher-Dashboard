@@ -589,7 +589,7 @@ export default function App() {
         <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
           <SidebarItem icon={LayoutDashboard} label="Overview" isActive={activeTab === 'Overview'} onClick={() => setActiveTab('Overview')} />
           <SidebarItem icon={UserCheck} label="Attendance" isActive={activeTab === 'Attendance'} onClick={() => setActiveTab('Attendance')} />
-          <SidebarItem icon={Users} label="Students" isActive={activeTab === 'Students'} count={42} onClick={() => setActiveTab('Students')} />
+          <SidebarItem icon={Users} label="Students" isActive={activeTab === 'Students'} count={students.length} onClick={() => setActiveTab('Students')} />
           <SidebarItem icon={ClipboardList} label="Tasks" isActive={activeTab === 'Tasks'} count={3} onClick={() => setActiveTab('Tasks')} />
           <SidebarItem icon={BookOpen} label="Gradebook" isActive={activeTab === 'Gradebook'} onClick={() => setActiveTab('Gradebook')} />
           <SidebarItem icon={BarChart3} label="Analytics" isActive={activeTab === 'Analytics'} onClick={() => setActiveTab('Analytics')} />

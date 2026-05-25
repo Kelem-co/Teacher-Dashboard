@@ -21,7 +21,6 @@ import {
   Clock,
 } from "lucide-react";
 import {
-  getAssessmentsByTeacher,
   getAssessmentsForContext,
   createAssessment,
   updateAssessment,
@@ -558,9 +557,12 @@ export default function TasksModule({
 
     const load = async () => {
       try {
-        const data = context
-          ? await getAssessmentsForContext(context)
-          : await getAssessmentsByTeacher();
+        if (!context) {
+          if (isActive) setAssessments([]);
+          return;
+        }
+
+        const data = await getAssessmentsForContext(context);
         if (isActive) setAssessments(data);
       } catch (err) {
         if (isActive) setError((err as Error).message);

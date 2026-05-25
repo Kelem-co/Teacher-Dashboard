@@ -2,34 +2,55 @@
 // Barrel file — single import location for all service types and functions.
 
 // --- Domain Types ---
-export type { Activity } from './activitiesService';
-export type { Student } from './studentsService';
-export type { GradeRecord } from './gradebookService';
-export type { SectionAnalytics, StudentAnalytics } from './analyticsService';
-export type { DailyEntry } from './homeworkService';
-export type { Thread, Message, Attachment, StudentSnapshot } from './messagesService';
-export type { ClassSlot, CalendarEvent } from './scheduleService';
-export type { Notification } from './notificationsService';
-export type { TeacherProfile, TeacherProfileUpdate } from './profileService';
-export type { TeacherSection, TeacherSubject } from './teacherSectionsService';
-export type { UserProfile } from './userProfileStore';
+export type { Activity } from "./activitiesService";
+export type {
+  Student,
+  StudentApi,
+  StudentListResponse,
+} from "./studentsService";
+export type { GradeRecord } from "./gradebookService";
+export type { SectionAnalytics, StudentAnalytics } from "./analyticsService";
+export type { DailyEntry } from "./homeworkService";
+export type {
+  Thread,
+  Message,
+  Attachment,
+  StudentSnapshot,
+} from "./messagesService";
+export type { ClassSlot, CalendarEvent } from "./scheduleService";
+export type { Notification } from "./notificationsService";
+export type { TeacherProfile, TeacherProfileUpdate } from "./profileService";
+export type { TeacherSection, TeacherSubject } from "./teacherSectionsService";
+export type { UserProfile } from "./userProfileStore";
 
 // --- ApiError ---
-export { ApiError } from './apiClient';
+export { ApiError } from "./apiClient";
 
 // --- Service functions ---
-export * from './activitiesService';
-export * from './studentsService';
+export * from "./activitiesService";
+export * from "./studentsService";
 // gradebookService: explicit re-export to avoid _resetMockStore collision
-export { getGrades, saveGrade } from './gradebookService';
-export * from './analyticsService';
+export { getGrades, saveGrade } from "./gradebookService";
+export * from "./analyticsService";
 // homeworkService: explicit re-export to avoid _resetMockStore collision
-export { getEntries, createEntry, updateEntryScores, toggleParentVisibility } from './homeworkService';
+export {
+  getEntries,
+  createEntry,
+  updateEntryScores,
+  toggleParentVisibility,
+} from "./homeworkService";
 // messagesService: explicit re-export to avoid _resetMockStore collision
-export { THREADS_DATA, getThreads, sendMessage, markThreadRead, markAllRead, updateParentInfo } from './messagesService';
-export * from './scheduleService';
-export * from './notificationsService';
-export * from './profileService';
-export * from './authService';
-export * from './teacherSectionsService';
-export * from './userProfileStore';
+export {
+  THREADS_DATA,
+  getThreads,
+  sendMessage,
+  markThreadRead,
+  markAllRead,
+  updateParentInfo,
+} from "./messagesService";
+export * from "./scheduleService";
+export * from "./notificationsService";
+export * from "./profileService";
+export * from "./authService";
+export * from "./teacherSectionsService";
+export * from "./userProfileStore";
