@@ -65,3 +65,4 @@ export * from "./teacherSectionsService";
 export * from "./userProfileStore";
 export * from "./attendanceService";
 export * from "./assessmentResultsService";
+export * from "./parentLinksService";

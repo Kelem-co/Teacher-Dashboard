@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getStudentsBySectionId } from "../services/studentsService";
+import { getAttendanceSummary, type AttendanceSummary } from "../services/attendanceService";
+import { getAssessmentResults, type AssessmentResult } from "../services/assessmentResultsService";
+import { getParentLinks, type ParentLink } from "../services/parentLinksService";
 
 // --- Types ---
 
@@ -226,6 +229,29 @@ const StudentsModule = ({
     | "Analytics"
   >("Overview");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Data loaded when a student is selected
+  const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null);
+  const [studentResults, setStudentResults] = useState<AssessmentResult[]>([]);
+  const [parentLinks, setParentLinks] = useState<ParentLink[]>([]);
+
+  // Load attendance, academics, and parent links when a student is selected
+  useEffect(() => {
+    if (!selectedStudent) {
+      setAttendanceSummary(null);
+      setStudentResults([]);
+      setParentLinks([]);
+      return;
+    }
+    const acYearId = activeSection?.academicYearId;
+    getAttendanceSummary(selectedStudent.id, acYearId).then(setAttendanceSummary);
+    getAssessmentResults({ student: selectedStudent.id }).then((res) =>
+      setStudentResults(res.results ?? []),
+    );
+    getParentLinks(selectedStudent.id).then(setParentLinks);
+  }, [selectedStudent?.id, activeSection?.academicYearId]);
+
+  const primaryParent = parentLinks.find((p) => p.is_primary_contact) ?? parentLinks[0] ?? null;
 
   // Load students when active section changes
   useEffect(() => {
@@ -667,7 +693,7 @@ const StudentsModule = ({
                       <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4">
                         Parent Connection
                       </h4>
-                      {selectedStudent.parentLinked ? (
+                      {primaryParent ? (
                         <div className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-indigo-100 transition-colors shadow-sm">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
@@ -675,10 +701,14 @@ const StudentsModule = ({
                             </div>
                             <div>
                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-                                Linked Account
+                                {primaryParent.relationship_type === "FATHER"
+                                  ? "Father"
+                                  : primaryParent.relationship_type === "MOTHER"
+                                    ? "Mother"
+                                    : "Guardian"}
                               </p>
                               <p className="text-sm font-bold text-slate-800">
-                                {selectedStudent.parentName}
+                                {primaryParent.parent_name}
                               </p>
                             </div>
                           </div>
@@ -699,13 +729,13 @@ const StudentsModule = ({
                               setEditSection(selectedStudent.section);
                               setEditStatus(selectedStudent.status);
                               setEditParentName(
-                                selectedStudent.parentName || "",
+                                primaryParent?.parent_name || selectedStudent.parentName || "",
                               );
                               setEditParentPhone(
-                                selectedStudent.parentPhone || "",
+                                primaryParent?.parent_phone || selectedStudent.parentPhone || "",
                               );
                               setEditParentEmail(
-                                selectedStudent.parentEmail || "",
+                                primaryParent?.parent_email || selectedStudent.parentEmail || "",
                               );
                               setEditParentLinked(true);
                               setIsEditModalOpen(true);
@@ -718,52 +748,92 @@ const StudentsModule = ({
                       )}
                     </div>
 
-                    <div>
-                      <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4">
-                        Emergency Contact
-                      </h4>
-                      <div className="p-5 bg-white border border-slate-100 rounded-2xl space-y-4 shadow-sm">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-sm font-bold text-slate-800 tracking-tight">
-                              Kassa Alemu
-                            </p>
-                            <p className="text-[10px] font-medium text-slate-400 uppercase">
-                              Grandparent • Guardian
-                            </p>
+                    {primaryParent && (
+                      <div>
+                        <h4 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4">
+                          Emergency Contact
+                        </h4>
+                        <div className="p-5 bg-white border border-slate-100 rounded-2xl space-y-4 shadow-sm">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-sm font-bold text-slate-800 tracking-tight">
+                                {primaryParent.parent_name}
+                              </p>
+                              <p className="text-[10px] font-medium text-slate-400 uppercase">
+                                {primaryParent.relationship_type === "FATHER"
+                                  ? "Father"
+                                  : primaryParent.relationship_type === "MOTHER"
+                                    ? "Mother"
+                                    : "Guardian"}
+                              </p>
+                            </div>
+                            <span className="text-sm font-mono font-bold text-slate-600">
+                              {primaryParent.parent_phone}
+                            </span>
                           </div>
-                          <span className="text-sm font-mono font-bold text-slate-600">
-                            +251 91 123 4567
-                          </span>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
                 {activeDetailTab === "Attendance" && (
                   <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="grid grid-cols-3 gap-4">
-                      {[
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {([
                         {
                           label: "Present",
-                          val: 18,
+                          val: attendanceSummary?.total_present ?? 0,
                           color: "text-emerald-500",
                           bg: "bg-emerald-500",
+                          pct: attendanceSummary
+                            ? Math.round(
+                                (attendanceSummary.total_present /
+                                  attendanceSummary.total_school_days) *
+                                  100,
+                              )
+                            : 0,
                         },
                         {
                           label: "Absent",
-                          val: 2,
+                          val: attendanceSummary?.total_absent ?? 0,
                           color: "text-red-500",
                           bg: "bg-red-500",
+                          pct: attendanceSummary
+                            ? Math.round(
+                                (attendanceSummary.total_absent /
+                                  attendanceSummary.total_school_days) *
+                                  100,
+                              )
+                            : 0,
                         },
                         {
                           label: "Late",
-                          val: 1,
+                          val: attendanceSummary?.total_late ?? 0,
                           color: "text-amber-500",
                           bg: "bg-amber-500",
+                          pct: attendanceSummary
+                            ? Math.round(
+                                (attendanceSummary.total_late /
+                                  attendanceSummary.total_school_days) *
+                                  100,
+                              )
+                            : 0,
                         },
-                      ].map((stat, i) => (
+                        {
+                          label: "Excused",
+                          val: attendanceSummary?.total_excused ?? 0,
+                          color: "text-blue-500",
+                          bg: "bg-blue-500",
+                          pct: attendanceSummary
+                            ? Math.round(
+                                (attendanceSummary.total_excused /
+                                  attendanceSummary.total_school_days) *
+                                  100,
+                              )
+                            : 0,
+                        },
+                      ] as const).map((stat, i) => (
                         <div
                           key={i}
                           className="p-4 bg-slate-50 rounded-2xl border border-slate-100/50 text-center"
@@ -778,7 +848,8 @@ const StudentsModule = ({
                           </p>
                           <div className="mt-3 w-full h-1 bg-white rounded-full overflow-hidden">
                             <div
-                              className={`h-full ${stat.bg} ${i === 0 ? "w-[85%]" : i === 1 ? "w-[10%]" : "w-[5%]"}`}
+                              className={`h-full ${stat.bg} rounded-full transition-all`}
+                              style={{ width: `${stat.pct}%` }}
                             />
                           </div>
                         </div>
@@ -787,23 +858,47 @@ const StudentsModule = ({
 
                     <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                        Monthly Overview
+                        Attendance Rate
                       </h4>
-                      <div className="grid grid-cols-7 gap-2">
-                        {Array.from({ length: 31 }, (_, i) => (
-                          <div
-                            key={i}
-                            className={`aspect-square rounded-lg flex items-center justify-center text-[9px] font-bold ${
-                              i % 8 === 0
-                                ? "bg-red-50 text-red-500"
-                                : i % 12 === 0
-                                  ? "bg-amber-50 text-amber-500"
-                                  : "bg-emerald-50 text-emerald-500"
-                            }`}
-                          >
-                            {i + 1}
+                      <div className="flex items-center gap-6">
+                        <div className="relative w-24 h-24">
+                          <svg className="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
+                            <circle
+                              cx="18" cy="18" r="15.5"
+                              fill="none" stroke="#e2e8f0" strokeWidth="3"
+                            />
+                            <circle
+                              cx="18" cy="18" r="15.5"
+                              fill="none"
+                              stroke={(() => {
+                                const r = attendanceSummary?.attendance_rate ?? 0;
+                                if (r >= 90) return "#10b981";
+                                if (r >= 75) return "#f59e0b";
+                                return "#ef4444";
+                              })()}
+                              strokeWidth="3"
+                              strokeDasharray={`${(attendanceSummary?.attendance_rate ?? 0) / 100 * 97.4} 97.4`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className={`text-xl font-black ${
+                              (attendanceSummary?.attendance_rate ?? 0) >= 90
+                                ? "text-emerald-500"
+                                : (attendanceSummary?.attendance_rate ?? 0) >= 75
+                                  ? "text-amber-500"
+                                  : "text-red-500"
+                            }`}>
+                              {attendanceSummary
+                                ? `${Math.round(attendanceSummary.attendance_rate)}%`
+                                : "—"}
+                            </span>
                           </div>
-                        ))}
+                        </div>
+                        <div className="space-y-1 text-xs text-slate-500">
+                          <p>Total school days: <span className="font-bold text-slate-700">{attendanceSummary?.total_school_days ?? "—"}</span></p>
+                          <p>Last updated: <span className="font-bold text-slate-700">{attendanceSummary?.last_updated ? new Date(attendanceSummary.last_updated).toLocaleDateString() : "—"}</span></p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -811,108 +906,126 @@ const StudentsModule = ({
 
                 {activeDetailTab === "Academics" && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                    {[
-                      {
-                        subject: "Mathematics",
-                        score: 87,
-                        color: "bg-indigo-500",
-                      },
-                      { subject: "Physics", score: 79, color: "bg-blue-500" },
-                      {
-                        subject: "English",
-                        score: 92,
-                        color: "bg-emerald-500",
-                      },
-                      { subject: "Biology", score: 74, color: "bg-amber-500" },
-                      { subject: "History", score: 88, color: "bg-indigo-400" },
-                    ].map((subj, i) => (
-                      <div key={i} className="space-y-2">
-                        <div className="flex justify-between items-end">
-                          <h5 className="text-xs font-bold text-slate-700 uppercase tracking-tight">
-                            {subj.subject}
-                          </h5>
-                          <span className="text-[11px] font-mono font-black text-slate-400">
-                            {subj.score}/100
-                          </span>
-                        </div>
-                        <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${subj.score}%` }}
-                            className={`h-full ${subj.color} rounded-full`}
-                          />
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="mt-8 p-5 rounded-2xl bg-[#1A237E]/5 border border-[#1A237E]/10 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-[#1A237E] shadow-sm">
-                          <Plus size={20} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-[#1A237E]">
-                            Semester Report Card
-                          </p>
-                          <p className="text-[9px] font-medium text-slate-400 uppercase">
-                            Ready for review
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="text-slate-300" size={16} />
-                    </div>
+                    {(() => {
+                      const subjectScores: Record<string, { total: number; count: number; maxTotal: number }> = {};
+                      studentResults.forEach((r) => {
+                        const name = r.subject_name ?? "General";
+                        if (!subjectScores[name]) subjectScores[name] = { total: 0, count: 0, maxTotal: 0 };
+                        if (r.obtained_marks) {
+                          subjectScores[name].total += Number(r.obtained_marks);
+                          subjectScores[name].count++;
+                        }
+                        if (r.total_marks) {
+                          subjectScores[name].maxTotal += Number(r.total_marks);
+                        }
+                      });
+                      const SUBJECT_COLORS: Record<string, string> = {
+                        Mathematics: "bg-indigo-500",
+                        Physics: "bg-blue-500",
+                        English: "bg-emerald-500",
+                        Biology: "bg-amber-500",
+                        History: "bg-indigo-400",
+                        Chemistry: "bg-violet-500",
+                      };
+                      const entries = Object.entries(subjectScores);
+                      return entries.length > 0
+                        ? entries.map(([subject, data]) => {
+                            const avg = data.count > 0 ? Math.round(data.total / data.count) : 0;
+                            const pct = data.maxTotal > 0 ? Math.round((data.total / data.maxTotal) * 100) : avg;
+                            const color = SUBJECT_COLORS[subject] ?? "bg-slate-500";
+                            return (
+                              <div key={subject} className="space-y-2">
+                                <div className="flex justify-between items-end">
+                                  <h5 className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+                                    {subject}
+                                  </h5>
+                                  <span className="text-[11px] font-mono font-black text-slate-400">
+                                    {avg}/{data.maxTotal > 0 ? Math.round(data.maxTotal / data.count) : 100}
+                                  </span>
+                                </div>
+                                <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                                  <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.min(pct, 100)}%` }}
+                                    className={`h-full ${color} rounded-full`}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })
+                        : (
+                          <div className="flex flex-col items-center justify-center p-10 text-slate-400">
+                            <p className="text-sm font-bold">No academic data available</p>
+                            <p className="text-xs mt-1">Assessment results will appear here once graded.</p>
+                          </div>
+                        );
+                    })()}
                   </div>
                 )}
 
                 {activeDetailTab === "Parent Info" && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="p-5 bg-white border border-slate-100 rounded-2xl space-y-4 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-[#1A237E]">
-                          <Users size={20} />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-slate-900 tracking-tight">
-                            {selectedStudent.parentName}
-                          </h4>
-                          <p className="text-[9px] font-black text-[#1A237E] uppercase tracking-wider">
-                            Parent / Guardian
-                          </p>
-                        </div>
+                    {parentLinks.length === 0 ? (
+                      <div className="p-5 bg-amber-50 border border-amber-100 rounded-2xl text-center">
+                        <p className="text-xs font-bold text-amber-700">
+                          No parent linked to this student.
+                        </p>
                       </div>
-
-                      <div className="space-y-2.5 pt-3 border-t border-slate-50">
-                        <div className="flex items-center gap-3 text-slate-500">
-                          <Mail size={13} className="text-slate-300" />
-                          <span className="text-xs font-medium">
-                            {selectedStudent.parentEmail}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-slate-500">
-                          <Phone size={13} className="text-slate-300" />
-                          <span className="text-xs font-mono font-medium">
-                            {selectedStudent.parentPhone}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 flex items-center justify-between border-t border-slate-50">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
-                          Linkage Status
-                        </span>
-                        <span
-                          className={`px-2.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border ${
-                            selectedStudent.parentLinked
-                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                              : "bg-amber-50 text-amber-600 border-amber-100"
-                          }`}
+                    ) : (
+                      parentLinks.map((link) => (
+                        <div
+                          key={link.id}
+                          className="p-5 bg-white border border-slate-100 rounded-2xl space-y-4 shadow-sm"
                         >
-                          {selectedStudent.parentLinked
-                            ? "VERIFIED"
-                            : "PENDING"}
-                        </span>
-                      </div>
-                    </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-[#1A237E]">
+                              <Users size={20} />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-slate-900 tracking-tight">
+                                {link.parent_name}
+                              </h4>
+                              <p className="text-[9px] font-black text-[#1A237E] uppercase tracking-wider">
+                                {link.relationship_type === "FATHER"
+                                  ? "Father"
+                                  : link.relationship_type === "MOTHER"
+                                    ? "Mother"
+                                    : link.relationship_type ?? "Guardian"}
+                                {link.is_primary_contact ? " • Primary" : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2.5 pt-3 border-t border-slate-50">
+                            {link.parent_email && (
+                              <div className="flex items-center gap-3 text-slate-500">
+                                <Mail size={13} className="text-slate-300" />
+                                <span className="text-xs font-medium">
+                                  {link.parent_email}
+                                </span>
+                              </div>
+                            )}
+                            {link.parent_phone && (
+                              <div className="flex items-center gap-3 text-slate-500">
+                                <Phone size={13} className="text-slate-300" />
+                                <span className="text-xs font-mono font-medium">
+                                  {link.parent_phone}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-3 flex items-center justify-between border-t border-slate-50">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
+                              Linkage Status
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border bg-emerald-50 text-emerald-600 border-emerald-100">
+                              VERIFIED
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
 
@@ -1267,10 +1380,10 @@ const StudentsModule = ({
                       setEditGrade(selectedStudent.grade);
                       setEditSection(selectedStudent.section);
                       setEditStatus(selectedStudent.status);
-                      setEditParentName(selectedStudent.parentName);
-                      setEditParentPhone(selectedStudent.parentPhone);
-                      setEditParentEmail(selectedStudent.parentEmail);
-                      setEditParentLinked(selectedStudent.parentLinked);
+                      setEditParentName(primaryParent?.parent_name ?? selectedStudent.parentName);
+                      setEditParentPhone(primaryParent?.parent_phone ?? selectedStudent.parentPhone);
+                      setEditParentEmail(primaryParent?.parent_email ?? selectedStudent.parentEmail);
+                      setEditParentLinked(!!primaryParent);
                       setIsEditModalOpen(true);
                     }
                   }}

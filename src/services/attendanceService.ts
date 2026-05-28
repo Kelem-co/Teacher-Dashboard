@@ -184,3 +184,65 @@ export async function bulkSubmitAttendance(
   if (Array.isArray(data)) return data;
   return data.results ?? [];
 }
+
+// ─── Attendance Summary ────────────────────────────────────────────────────────
+
+export interface AttendanceSummary {
+  id: string;
+  organization?: string;
+  student?: string;
+  student_name?: string;
+  academic_year?: string;
+  academic_year_name?: string;
+  total_present: number;
+  total_absent: number;
+  total_late: number;
+  total_excused: number;
+  total_school_days: number;
+  attendance_rate: number;
+  last_updated?: string;
+}
+
+interface AttendanceSummaryListResponse {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: AttendanceSummary[];
+}
+
+/**
+ * Fetch attendance summary for a student.
+ * GET /api/attendance-summaries/?student=<studentId>&academic_year=<academicYearId>
+ */
+export async function getAttendanceSummary(
+  studentId: string,
+  academicYearId?: string,
+): Promise<AttendanceSummary | null> {
+  if (IS_MOCK) {
+    return {
+      id: "mock-summary",
+      student: studentId,
+      student_name: "Mock Student",
+      total_present: 18,
+      total_absent: 2,
+      total_late: 1,
+      total_excused: 0,
+      total_school_days: 21,
+      attendance_rate: 85.7,
+    };
+  }
+
+  const params = new URLSearchParams();
+  params.set("student", studentId);
+  if (academicYearId) params.set("academic_year", academicYearId);
+
+  try {
+    const data = await request<AttendanceSummaryListResponse>(
+      "GET",
+      `/api/attendance-summaries/?${params.toString()}`,
+    );
+    return data.results?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
