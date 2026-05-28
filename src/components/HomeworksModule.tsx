@@ -27,6 +27,10 @@ import {
   type AssessmentCreate,
 } from "../services/assessmentsService";
 import * as studentsService from "../services/studentsService";
+import {
+  getResultsByAssessment,
+  bulkGrade,
+} from "../services/assessmentResultsService";
 
 // --- Shared Types & Data ---
 
@@ -41,7 +45,7 @@ interface DailyEntry {
   date: string; // "YYYY-MM-DD"
   section: string; // e.g. "Grade 7A"
   subject: string;
-  type: "Homework" | "Classwork";
+  type: "Homework";
   title: string;
   description: string;
   maxScore: number;
@@ -150,7 +154,6 @@ function getEntryTypesForDay(date: Date, allEntries: DailyEntry[]) {
 
 const ENTRY_DOT_COLORS: Record<string, string> = {
   Homework: "#f59e0b",
-  Classwork: "#7c3aed",
   Exam: "#ef4444",
   Quiz: "#0891b2",
   Project: "#10b981",
@@ -176,22 +179,15 @@ const getSubjectColor = (subject: string) => {
 };
 
 interface HomeworksModuleProps {
-  globalGrade?: string;
-  globalSection?: string;
   activeSection?: any;
   selectedSubject?: string;
 }
 
 const HomeworksModule = ({
-  globalGrade = "Grade 7",
-  globalSection = "Sec A",
   activeSection,
   selectedSubject,
 }: HomeworksModuleProps) => {
   const [entries, setEntries] = useState<DailyEntry[]>([]);
-
-  // Derive selectedSection from props
-  const selectedSection = `${globalGrade}${globalSection.replace("Sec ", "")}`;
 
   const [sectionStudents, setSectionStudents] = useState<
     import("../services/studentsService").Student[]
@@ -218,20 +214,23 @@ const HomeworksModule = ({
       try {
         const assessments = await getHomeworksForContext(context);
         if (!cancelled) {
-          // Map assessments into DailyEntry-like shape for the calendar UI
-          const mapped = assessments.map((a) => ({
-            id: a.id,
-            date: a.dueDate ?? new Date().toISOString().split("T")[0],
-            section: a.sectionName ?? selectedSection,
-            subject: a.subjectName ?? "General",
-            type: "Homework",
-            title: a.title,
-            description: a.description ?? "",
-            maxScore: Number(a.totalMarks) || 10,
-            scores: {},
-            parentVisible: a.status === "PUBLISHED",
-          }));
-          setEntries(mapped as any);
+          setEntries((prev) =>
+            assessments.map((a) => {
+              const existing = prev.find((e) => e.id === a.id);
+              return {
+                id: a.id,
+                date: a.dueDate ?? new Date().toISOString().split("T")[0],
+                section: a.sectionName ?? activeSection?.sectionName ?? "",
+                subject: a.subjectName ?? "General",
+                type: "Homework" as const,
+                title: a.title,
+                description: a.description ?? "",
+                maxScore: Number(a.totalMarks) || 10,
+                scores: existing?.scores ?? {},
+                parentVisible: a.status === "PUBLISHED",
+              };
+            }) as DailyEntry[],
+          );
         }
       } catch (e) {
         // keep existing empty state
@@ -240,15 +239,17 @@ const HomeworksModule = ({
     return () => {
       cancelled = true;
     };
-  }, [context, selectedSection]);
+  }, [context]);
 
-  // Load section students from service whenever selectedSection changes
+  // Load section students from service whenever activeSection changes
   useEffect(() => {
+    if (!activeSection?.sectionId) return;
     let cancelled = false;
     (async () => {
       try {
-        const data =
-          await studentsService.getStudentsBySection(selectedSection);
+        const data = await studentsService.getStudentsBySectionId(
+          activeSection.sectionId,
+        );
         if (!cancelled) setSectionStudents(data);
       } catch {
         // keep existing empty state
@@ -257,23 +258,22 @@ const HomeworksModule = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedSection]);
+  }, [activeSection?.sectionId]);
 
-  const [subjectFilter, setSubjectFilter] = useState("All Subjects");
   const [typeFilter, setTypeFilter] = useState("All");
   const [viewMonth, setViewMonth] = useState(() => {
-    const d = new Date("2025-06-02T00:00:00");
+    const d = new Date();
     d.setDate(1);
     d.setHours(0, 0, 0, 0);
     return d;
   });
 
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(() => {
-    return getCurrentWeekIndex(new Date("2025-06-02T00:00:00"));
+    return getCurrentWeekIndex(new Date());
   });
 
   const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date("2025-06-02T00:00:00");
+    const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   });
@@ -336,7 +336,7 @@ const HomeworksModule = ({
   };
 
   const handleToday = () => {
-    const today = new Date("2025-06-02T00:00:00");
+    const today = new Date();
     today.setHours(0, 0, 0, 0);
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     setViewMonth(monthStart);
@@ -375,26 +375,42 @@ const HomeworksModule = ({
   const [editScores, setEditScores] = useState<Record<string, number | null>>(
     {},
   );
+  const [saving, setSaving] = useState(false);
 
+  // Fetch results when the side sheet opens and update entry scores for card display
   useEffect(() => {
-    if (selectedEntry) {
-      setEditScores(selectedEntry.scores);
+    if (!selectedEntryId) {
+      setEditScores({});
+      return;
     }
-  }, [selectedEntry?.id]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await getResultsByAssessment(selectedEntryId);
+        if (!cancelled) {
+          const scores = resultsToScores(results);
+          setEditScores(scores);
+          updateEntryScores(selectedEntryId, scores);
+        }
+      } catch {
+        if (!cancelled) setEditScores({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEntryId]);
 
   // Filters
   const filteredEntries = useMemo(() => {
     return entriesForSelectedDay
       .filter((entry) => {
-        const isSameSection = entry.section === selectedSection;
-        const isSameSubject =
-          subjectFilter === "All Subjects" || entry.subject === subjectFilter;
         const isSameType = typeFilter === "All" || entry.type === typeFilter;
 
-        return isSameSection && isSameSubject && isSameType;
+        return isSameType;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [entriesForSelectedDay, selectedSection, subjectFilter, typeFilter]);
+  }, [entriesForSelectedDay, typeFilter]);
 
   // Grouped Entries
   const groupedEntries = useMemo(() => {
@@ -453,21 +469,37 @@ const HomeworksModule = ({
     };
   }, [filteredEntries]);
 
+  const resultsToScores = (results: import("../services/assessmentResultsService").AssessmentResult[]) => {
+    const scores: Record<string, number | null> = {};
+    results.forEach((r) => {
+      if (r.student) {
+        const marks = r.obtained_marks;
+        scores[r.student] = marks !== null && marks !== undefined ? Number(marks) : null;
+      }
+    });
+    return scores;
+  };
+
+  const updateEntryScores = (entryId: string, scores: Record<string, number | null>) => {
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entryId ? { ...e, scores } : e)),
+    );
+  };
+
   // Handlers
   const handleToggleParentVisible = async (id: string) => {
-    // For homeworks we simply toggle visibility client-side and refresh list
-    // Server API for toggling visibility isn't modeled here; re-fetch homeworks
     const assessments = await getHomeworksForContext(context);
+    const existing = entries.find((e) => e.id === id);
     const mapped = assessments.map((a) => ({
       id: a.id,
       date: a.dueDate ?? new Date().toISOString().split("T")[0],
-      section: a.sectionName ?? selectedSection,
+      section: a.sectionName ?? activeSection?.sectionName ?? "",
       subject: a.subjectName ?? "General",
-      type: "Homework",
+      type: "Homework" as const,
       title: a.title,
       description: a.description ?? "",
       maxScore: Number(a.totalMarks) || 10,
-      scores: {},
+      scores: existing?.id === a.id ? existing.scores : {},
       parentVisible: a.status === "PUBLISHED",
     }));
     setEntries(mapped as any);
@@ -479,24 +511,33 @@ const HomeworksModule = ({
   };
 
   const handleSaveScores = async () => {
-    if (!selectedEntryId) return;
-    // Homeworks aren't graded in this tab; treat save as a no-op and refresh
-    const assessments = await getHomeworksForContext(context);
-    const mapped = assessments.map((a) => ({
-      id: a.id,
-      date: a.dueDate ?? new Date().toISOString().split("T")[0],
-      section: a.sectionName ?? selectedSection,
-      subject: a.subjectName ?? "General",
-      type: "Homework",
-      title: a.title,
-      description: a.description ?? "",
-      maxScore: Number(a.totalMarks) || 10,
-      scores: {},
-      parentVisible: a.status === "PUBLISHED",
-    }));
-    setEntries(mapped as any);
-    setSaveConfirm(true);
-    setTimeout(() => setSaveConfirm(false), 2000);
+    if (!selectedEntryId || !selectedEntry) return;
+    setSaving(true);
+    try {
+      const items = Object.entries(editScores).map(([studentId, score]) => ({
+        student: studentId,
+        obtained_marks: score,
+        submission_status: score !== null ? ("GRADED" as const) : ("MISSING" as const),
+      }));
+
+      if (items.length === 0) return;
+
+      await bulkGrade({
+        assessment: selectedEntryId,
+        results: items,
+      });
+
+      const updated = await getResultsByAssessment(selectedEntryId);
+      const scores = resultsToScores(updated);
+      setEditScores(scores);
+      updateEntryScores(selectedEntryId, scores);
+      setSaveConfirm(true);
+      setTimeout(() => setSaveConfirm(false), 2000);
+    } catch (err) {
+      console.error("Failed to save scores", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCreateHomework = async () => {
@@ -528,21 +569,25 @@ const HomeworksModule = ({
         newHomework as AssessmentCreate,
         context as any,
       );
-      // refresh list
+      // refresh list, preserving existing scores
       const assessments = await getHomeworksForContext(context as any);
-      const mapped = assessments.map((a) => ({
-        id: a.id,
-        date: a.dueDate ?? new Date().toISOString().split("T")[0],
-        section: a.sectionName ?? selectedSection,
-        subject: a.subjectName ?? "General",
-        type: "Homework",
-        title: a.title,
-        description: a.description ?? "",
-        maxScore: Number(a.totalMarks) || 10,
-        scores: {},
-        parentVisible: a.status === "PUBLISHED",
-      }));
-      setEntries(mapped as any);
+      setEntries((prev) =>
+        assessments.map((a) => {
+          const existing = prev.find((e) => e.id === a.id);
+          return {
+            id: a.id,
+            date: a.dueDate ?? new Date().toISOString().split("T")[0],
+            section: a.sectionName ?? activeSection?.sectionName ?? "",
+            subject: a.subjectName ?? "General",
+            type: "Homework" as const,
+            title: a.title,
+            description: a.description ?? "",
+            maxScore: Number(a.totalMarks) || 10,
+            scores: existing?.scores ?? {},
+            parentVisible: a.status === "PUBLISHED",
+          };
+        }) as DailyEntry[],
+      );
       setSelectedEntryId(created.id);
       setIsModalOpen(false);
       // reset
@@ -603,27 +648,7 @@ const HomeworksModule = ({
             onChange={(e) => setTypeFilter(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1a237e]/20"
           >
-            {["All", "Homework", "Classwork"].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={newHomeworkSubject}
-            onChange={(e) => setNewHomeworkSubject(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1a237e]/20"
-          >
-            {[
-              "All Subjects",
-              "Mathematics",
-              "Physics",
-              "English",
-              "Biology",
-              "History",
-              "Chemistry",
-            ].map((s) => (
+            {["All", "Homework"].map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -701,7 +726,7 @@ const HomeworksModule = ({
         <div className="grid grid-cols-7 gap-2">
           {daysInWeek.map((date, idx) => {
             const isSelected = isSameDay(date, selectedDate);
-            const isToday = isSameDay(date, new Date("2025-06-02T00:00:00"));
+            const isToday = isSameDay(date, new Date());
             const dayOfWeek = date.getDay();
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
 
@@ -769,7 +794,7 @@ const HomeworksModule = ({
               {metrics.entriesCount}
             </h3>
             <span className="text-[10px] text-slate-400 font-medium">
-              homework + classwork
+              homework
             </span>
           </div>
           <div className="mt-2 h-1 w-full bg-blue-50 rounded-full overflow-hidden">
@@ -920,11 +945,7 @@ const HomeworksModule = ({
                               {entry.subject}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                                entry.type === "Homework"
-                                  ? "bg-blue-50 text-blue-700"
-                                  : "bg-violet-50 text-violet-700"
-                              }`}
+                              className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-blue-50 text-blue-700"
                             >
                               {entry.type}
                             </span>
@@ -1063,11 +1084,7 @@ const HomeworksModule = ({
                         {selectedEntry.subject}
                       </span>
                       <span
-                        className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                          selectedEntry.type === "Homework"
-                            ? "bg-blue-50 text-blue-700"
-                            : "bg-violet-50 text-violet-700"
-                        }`}
+                        className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-blue-50 text-blue-700"
                       >
                         {selectedEntry.type}
                       </span>
@@ -1315,9 +1332,10 @@ const HomeworksModule = ({
                     <div className="relative">
                       <button
                         onClick={handleSaveScores}
-                        className="w-full sm:w-auto bg-[#1a237e] text-white rounded-xl px-6 py-3 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-blue-900 active:scale-95 transition-all"
+                        disabled={saving}
+                        className="w-full sm:w-auto bg-[#1a237e] text-white rounded-xl px-6 py-3 sm:py-2.5 text-[11px] sm:text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:bg-blue-900 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95 transition-all"
                       >
-                        Save Scores
+                        {saving ? "Saving…" : "Save Scores"}
                       </button>
                       <AnimatePresence>
                         {saveConfirm && (

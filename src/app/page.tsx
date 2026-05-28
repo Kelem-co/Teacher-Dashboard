@@ -1646,8 +1646,6 @@ export default function App() {
           )}
           {activeTab === "Homeworks" && (
             <HomeworksModule
-              globalGrade={globalGrade}
-              globalSection={globalSection}
               activeSection={activeSection}
               selectedSubject={selectedSubject}
             />
