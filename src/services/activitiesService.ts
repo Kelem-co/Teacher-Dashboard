@@ -258,7 +258,42 @@ export async function getActivities(): Promise<Activity[]> {
     return loadActivities();
   }
   return request<Activity[]>('GET', '/api/activities');
+}
+
+export async function createActivity(activity: Omit<Activity, 'id'>): Promise<Activity> {
+  if (IS_MOCK) {
+    const activities = loadActivities();
+    const newActivity: Activity = {
+      ...activity,
+      id: (activity as any).id !== undefined ? (activity as any).id : `ACT-${Date.now()}`,
+    } as Activity;
+    activities.push(newActivity);
+    persistActivities(activities);
+    dispatchUpdatedEvent();
+    return newActivity;
+  }
   return request<Activity>('POST', '/api/activities', activity);
+}
+
+export async function updateActivity(id: string, changes: Partial<Activity>): Promise<Activity> {
+  if (IS_MOCK) {
+    const activities = loadActivities();
+    const index = activities.findIndex((a) => a.id === id);
+    if (index === -1) throw new Error(`Activity ${id} not found`);
+    activities[index] = { ...activities[index], ...changes };
+    persistActivities(activities);
+    dispatchUpdatedEvent();
+    return activities[index];
+  }
   return request<Activity>('PATCH', `/api/activities/${id}`, changes);
+}
+
+export async function deleteActivity(id: string): Promise<void> {
+  if (IS_MOCK) {
+    const activities = loadActivities().filter((a) => a.id !== id);
+    persistActivities(activities);
+    dispatchUpdatedEvent();
+    return;
+  }
   return request<void>('DELETE', `/api/activities/${id}`);
 }

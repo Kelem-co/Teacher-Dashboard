@@ -168,17 +168,25 @@ const MASTER_TIMETABLE: Record<DaysOfWeek, ClassSlot[]> = getFullTimetable();
  */
 export async function getTimetable(grade: string, section: string): Promise<ClassSlot[]> {
   if (IS_MOCK) {
-    const slots: ClassSlot[] = [];
-    for (const day of DAYS) {
-      for (const slot of MASTER_TIMETABLE[day]) {
-        if (slot.grade === grade && slot.section === section) {
-          slots.push(slot);
-        }
+    return getMockTimetable(grade, section);
+  }
+  try {
+    return await request<ClassSlot[]>('GET', `/api/schedule/timetable?grade=${encodeURIComponent(grade)}&section=${encodeURIComponent(section)}`);
+  } catch {
+    return getMockTimetable(grade, section);
+  }
+}
+
+function getMockTimetable(grade: string, section: string): ClassSlot[] {
+  const slots: ClassSlot[] = [];
+  for (const day of DAYS) {
+    for (const slot of MASTER_TIMETABLE[day]) {
+      if (slot.grade === grade && slot.section === section) {
+        slots.push(slot);
       }
     }
-    return slots;
   }
-  return request<ClassSlot[]>('GET', `/api/schedule/timetable?grade=${encodeURIComponent(grade)}&section=${encodeURIComponent(section)}`);
+  return slots;
 }
 
 /**
@@ -186,5 +194,9 @@ export async function getTimetable(grade: string, section: string): Promise<Clas
  */
 export async function getAcademicCalendar(): Promise<CalendarEvent[]> {
   if (IS_MOCK) return [...YEARLY_CALENDAR_DATA];
-  return request<CalendarEvent[]>('GET', '/api/schedule/calendar');
+  try {
+    return await request<CalendarEvent[]>('GET', '/api/schedule/calendar');
+  } catch {
+    return [...YEARLY_CALENDAR_DATA];
+  }
 }

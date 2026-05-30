@@ -27,15 +27,15 @@ export async function fetchSchoolName(): Promise<string | null> {
   // Ensure branch ID is resolved from the teacher profile first
   const orgInfo = await ensureTeacherOrgBranch();
   const branchId = orgInfo.branchId || getTeacherBranch();
-  if (!branchId) return null;
+  if (!branchId) return "EduGov School";
 
   try {
     const data = await request<BranchSchool>(
       "GET",
       `/api/branches/${branchId}/school-name/`,
     );
-    return data.name || null;
+    return data.name || "EduGov School";
   } catch {
-    return null;
+    return "EduGov School";
   }
 }
