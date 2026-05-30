@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { motion } from "motion/react";
 import { Lock, CheckCircle2 } from "lucide-react";
 import { completeTeacherInvitation } from "../../../../services";
@@ -18,12 +18,9 @@ function validatePassword(password: string, confirm: string): string | null {
   return null;
 }
 
-export default function CompleteTeacherInvitationPage({
-  params,
-}: {
-  params: { uid: string; token: string };
-}) {
+export default function CompleteTeacherInvitationPage() {
   const router = useRouter();
+  const params = useParams<{ uid: string; token: string }>();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +40,18 @@ export default function CompleteTeacherInvitationPage({
       return;
     }
 
+    const uid = params?.uid;
+    const token = params?.token;
+    if (!uid || !token || Array.isArray(uid) || Array.isArray(token)) {
+      setError("Invalid invitation link.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      await completeTeacherInvitation(params.uid, params.token, password);
+      await completeTeacherInvitation(uid, token, password);
       setSuccess(true);
       setTimeout(() => router.replace("/login"), 1600);
     } catch (err) {

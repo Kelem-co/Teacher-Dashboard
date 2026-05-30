@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import {
@@ -24,7 +24,7 @@ const EMPTY_QUAL: Omit<TeacherQualification, "id"> = {
 
 const MAX_QUALIFICATIONS = 4;
 
-export default function TeacherProfilePage() {
+function ProfileInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -425,6 +425,14 @@ export default function TeacherProfilePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function TeacherProfilePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-slate-500">Loading profile…</div>}>
+      <ProfileInner />
+    </Suspense>
   );
 }
 
