@@ -295,8 +295,47 @@ export function _resetMockStore(): void {
 export async function getThreads(): Promise<Thread[]> {
   if (IS_MOCK) return [...mockStore];
   return request<Thread[]>('GET', '/api/threads');
+}
+
+export async function sendMessage(threadId: string, message: { text: string; sender?: string; time?: string }): Promise<Thread> {
+  if (IS_MOCK) {
+    const thread = mockStore.find((t) => t.id === threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    const newMsg: Message = {
+      id: `M-${Date.now()}`,
+      sender: (message.sender as 'teacher' | 'parent') || 'teacher',
+      text: message.text,
+      time: message.time || new Date().toLocaleTimeString(),
+    };
+    thread.messages.push(newMsg);
+    return thread;
+  }
   return request<Thread>('POST', `/api/threads/${threadId}/messages`, message);
+}
+
+export async function markThreadRead(threadId: string): Promise<void> {
+  if (IS_MOCK) {
+    const thread = mockStore.find((t) => t.id === threadId);
+    if (thread) thread.unread = false;
+    return;
+  }
   return request<void>('PATCH', `/api/threads/${threadId}/read`);
+}
+
+export async function markAllRead(): Promise<void> {
+  if (IS_MOCK) {
+    mockStore.forEach((t) => { t.unread = false; });
+    return;
+  }
   return request<void>('POST', '/api/threads/mark-all-read');
+}
+
+export async function updateParentInfo(threadId: string, changes: Partial<Thread>): Promise<Thread> {
+  if (IS_MOCK) {
+    const thread = mockStore.find((t) => t.id === threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    Object.assign(thread, changes);
+    return thread;
+  }
   return request<Thread>('PATCH', `/api/threads/${threadId}`, changes);
 }

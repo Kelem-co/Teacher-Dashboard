@@ -123,8 +123,34 @@ export async function getEntries(
     params.set('to', dateRange.to);
   }
   return request<DailyEntry[]>('GET', `/api/homework?${params.toString()}`);
+}
+
+export async function createEntry(entry: Omit<DailyEntry, 'id'>): Promise<DailyEntry> {
+  if (IS_MOCK) {
+    const newEntry: DailyEntry = { ...entry, id: generateId() } as DailyEntry;
+    mockStore.push(newEntry);
+    return newEntry;
+  }
   return request<DailyEntry>('POST', '/api/homework', entry);
+}
+
+export async function updateEntryScores(entryId: string, scores: Record<string, number | null>): Promise<DailyEntry> {
+  if (IS_MOCK) {
+    const entry = mockStore.find((e) => e.id === entryId);
+    if (!entry) throw new Error(`Entry ${entryId} not found`);
+    entry.scores = { ...entry.scores, ...scores };
+    return entry;
+  }
   return request<DailyEntry>('PATCH', `/api/homework/${entryId}/scores`, { scores });
+}
+
+export async function toggleParentVisibility(entryId: string): Promise<DailyEntry> {
+  if (IS_MOCK) {
+    const entry = mockStore.find((e) => e.id === entryId);
+    if (!entry) throw new Error(`Entry ${entryId} not found`);
+    entry.parentVisible = !entry.parentVisible;
+    return entry;
+  }
   return request<DailyEntry>('PATCH', `/api/homework/${entryId}/visibility`);
 }
 
