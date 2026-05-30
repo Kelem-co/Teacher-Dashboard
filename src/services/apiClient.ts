@@ -203,7 +203,9 @@ export async function request<T>(
         message = "Request failed. Please try again or contact support.";
       }
 
-      console.error(`❌ HTTP Error ${res.status}: ${message}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`⚠️ API ${res.status}: ${message.slice(0, 200)}`);
+      }
       throw new ApiError(
         message || res.statusText || `HTTP ${res.status}`,
         res.status,
