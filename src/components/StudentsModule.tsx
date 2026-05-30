@@ -209,12 +209,14 @@ interface StudentsModuleProps {
   globalGrade?: string;
   globalSection?: string;
   activeSection?: any;
+  isHomeroomTeacher?: boolean;
 }
 
 const StudentsModule = ({
   globalGrade,
   globalSection,
   activeSection,
+  isHomeroomTeacher,
 }: StudentsModuleProps) => {
   const [students, setStudents] = useState<Student[]>(STUDENTS_MOCK);
   const [isLoading, setIsLoading] = useState(false);
@@ -767,9 +769,11 @@ const StudentsModule = ({
                                     : "Guardian"}
                               </p>
                             </div>
-                            <span className="text-sm font-mono font-bold text-slate-600">
-                              {primaryParent.parent_phone}
-                            </span>
+                            {isHomeroomTeacher && (
+                              <span className="text-sm font-mono font-bold text-slate-600">
+                                {primaryParent.parent_phone}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1005,7 +1009,7 @@ const StudentsModule = ({
                                 </span>
                               </div>
                             )}
-                            {link.parent_phone && (
+                            {isHomeroomTeacher && link.parent_phone && (
                               <div className="flex items-center gap-3 text-slate-500">
                                 <Phone size={13} className="text-slate-300" />
                                 <span className="text-xs font-mono font-medium">
@@ -1371,7 +1375,7 @@ const StudentsModule = ({
                   }}
                   className="w-full py-4 bg-[#1A237E] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-blue-900/20 hover:bg-blue-900 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  Send SMS to Parent
+                  Chat with {primaryParent?.parent_name ?? "Parent"}
                 </button>
                 <button
                   onClick={() => {

@@ -52,7 +52,6 @@ import {
   PerformanceDistribution,
   ParentEngagementChart,
 } from "../components/AnalyticsCharts";
-import { THREADS_DATA } from "../components/MessagesModule";
 import type { Thread } from "../services";
 import {
   getStudents,
@@ -72,6 +71,11 @@ import {
 } from "../services/attendanceService";
 import { getAssessmentsForContext } from "../services/assessmentsService";
 import { getAccessToken } from "../services/authStore";
+import { HomeroomProvider } from "../contexts/HomeroomContext";
+import { checkHomeroomStatus } from "../services/homeroomService";
+import { fetchSchoolName } from "../services/schoolService";
+import { getParentsByBranch } from "../services/parentLinksService";
+import { ensureTeacherOrgBranch } from "../services/profileService";
 import type {
   AttendanceListItem,
   Student,
@@ -255,9 +259,11 @@ export default function App() {
   const [activeMessageThreadId, setActiveMessageThreadId] = useState<
     string | null
   >(null);
-  const [messageThreads, setMessageThreads] = useState<Thread[]>(THREADS_DATA);
+  const [messageThreads, setMessageThreads] = useState<Thread[]>([]);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const [isHomeroomTeacher, setIsHomeroomTeacher] = useState(false);
+  const [schoolName, setSchoolName] = useState("EduGov");
 
   const toLocalISODate = (date: Date) => {
     const year = date.getFullYear();
@@ -270,6 +276,15 @@ export default function App() {
   const todayISO = toLocalISODate(new Date());
   const isSelectedDateReadOnly = selectedDateISO > todayISO;
   const isSelectedDateToday = selectedDateISO === todayISO;
+  const isAttendanceReadOnly = !isHomeroomTeacher;
+  const cantEdit = isAttendanceReadOnly || selectedDateISO !== todayISO;
+
+  // Force Day view when attendance is read-only (non-homeroom teacher)
+  useEffect(() => {
+    if (isAttendanceReadOnly && attendanceView !== "Day") {
+      setAttendanceView("Day");
+    }
+  }, [isAttendanceReadOnly, attendanceView]);
 
   type ToastKind = "error" | "info" | "success";
   type Toast = { id: string; kind: ToastKind; message: string };
@@ -335,7 +350,12 @@ export default function App() {
       .catch(() => {});
   }, [authChecked]);
 
-  // ...existing code...
+  useEffect(() => {
+    fetchSchoolName().then((name) => {
+      if (name) setSchoolName(name);
+    });
+  }, []);
+
 
   const [notifications, setNotifications] = useState<
     import("../services").Notification[]
@@ -512,6 +532,99 @@ export default function App() {
       subjectOptions[0]
     );
   }, [selectedSubject, subjectOptions]);
+
+  // Check homeroom status when grade or section changes
+  useEffect(() => {
+    const sectionId = activeSection?.sectionId;
+    const academicYearId = activeSection?.academicYearId;
+    console.log("[HomeroomCheck] effect fired", { globalGrade, globalSection, sectionId, academicYearId });
+    if (!sectionId) {
+      console.log("[HomeroomCheck] no sectionId, setting false");
+      setIsHomeroomTeacher(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      console.log("[HomeroomCheck] calling checkHomeroomStatus", { sectionId, academicYearId });
+      const result = await checkHomeroomStatus(sectionId, academicYearId);
+      console.log("[HomeroomCheck] result", result);
+      if (!cancelled) setIsHomeroomTeacher(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    globalGrade,
+    globalSection,
+    activeSection?.sectionId,
+    activeSection?.academicYearId,
+  ]);
+
+  // Build message threads from real parent data when section students load
+  useEffect(() => {
+    if (!sectionStudents.length) return;
+    let cancelled = false;
+    (async () => {
+      // Resolve branch ID from teacher profile
+      const orgInfo = await ensureTeacherOrgBranch();
+      if (!orgInfo.branchId) return;
+      if (cancelled) return;
+
+      const parents = await getParentsByBranch(orgInfo.branchId);
+      if (cancelled || !parents.length) return;
+
+      // Build a map: studentId → parent (from student_details)
+      const parentByStudent = new Map<string, typeof parents[0]>();
+      const seenParentIds = new Set<string>();
+      for (const p of parents) {
+        if (seenParentIds.has(p.parentId)) continue;
+        seenParentIds.add(p.parentId);
+        for (const sid of p.studentIds) {
+          if (!parentByStudent.has(sid)) parentByStudent.set(sid, p);
+        }
+      }
+
+      setMessageThreads((prev) => {
+        const existingStudentIds = new Set(prev.map((t) => t.studentId));
+        const newThreads: Thread[] = [];
+
+        for (const student of sectionStudents) {
+          if (existingStudentIds.has(student.id)) continue;
+          const parent = parentByStudent.get(student.id);
+          if (!parent) continue;
+
+          const pInitials =
+            parent.parentName.split(" ").map((n) => n[0]).join("") || "P";
+          newThreads.push({
+            id: `THR-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            parentName: parent.parentName,
+            parentInitials: pInitials,
+            parentPhone: parent.parentPhone,
+            parentEmail: parent.parentEmail,
+            studentName: student.name,
+            studentId: student.id,
+            studentGrade: student.section ?? "",
+            avatarColor: (["blue", "teal", "purple", "amber", "green"] as const)[
+              Math.floor(Math.random() * 5)
+            ],
+            unread: false,
+            lastTime: "",
+            preview: "",
+            studentSnapshot: {
+              overallAvg: Math.round(student.performance ?? 0),
+              attendance: 95,
+              parentEngagement: 50,
+              recentHomework: [],
+            },
+            messages: [],
+          });
+        }
+
+        return newThreads.length ? [...prev, ...newThreads] : prev;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [sectionStudents]);
 
   const getWeekStart = (date: Date) => {
     const start = new Date(date);
@@ -744,7 +857,7 @@ export default function App() {
     studentId: string,
     status: "present" | "absent" | "late" | "excused",
   ) => {
-    if (isSelectedDateReadOnly) return;
+    if (cantEdit) return;
     const dateKey = selectedDate.toDateString();
     const existingRecord = attendance[dateKey]?.[studentId];
     setAttendance((prev) => {
@@ -825,7 +938,7 @@ export default function App() {
   };
 
   const saveAttendanceRemarks = async (studentId: string, remarks: string) => {
-    if (isSelectedDateReadOnly) return;
+    if (cantEdit) return;
     const dateKey = selectedDate.toDateString();
     const entry = attendance[dateKey]?.[studentId];
 
@@ -889,7 +1002,7 @@ export default function App() {
   };
 
   const markAllPresent = () => {
-    if (isSelectedDateReadOnly) return;
+    if (cantEdit) return;
     const dateKey = selectedDate.toDateString();
     setAttendance((prev) => {
       const nextDay = { ...(prev[dateKey] || {}) };
@@ -1114,73 +1227,76 @@ export default function App() {
     const handleSendStudentSms = (e: Event) => {
       const customEvent = e as CustomEvent<{ studentId: string }>;
       const studentId = customEvent.detail.studentId;
-      if (studentId) {
-        const student = students.find((s) => s.id === studentId);
-        if (student) {
-          const existingThread = messageThreads.find(
-            (t) =>
-              t.studentId === student.id ||
-              t.studentName
-                .toLowerCase()
-                .includes(student.name.split(" ")[0].toLowerCase()) ||
-              t.parentName
-                .toLowerCase()
-                .includes(student.parentName.split(" ")[0].toLowerCase()),
-          );
+      if (!studentId) return;
 
-          if (existingThread) {
-            setActiveMessageThreadId(existingThread.id);
-          } else {
-            const pInitials =
-              student.parentName
-                .split(" ")
-                .map((n) => n[0])
-                .join("") || "P";
-            const newThreadId = `THR-${Date.now()}`;
-            const newThread: Thread = {
-              id: newThreadId,
-              parentName: student.parentName,
-              parentInitials: pInitials,
-              parentPhone:
-                student.parentPhone ??
-                "+251 9" + Math.floor(10000000 + Math.random() * 90000000),
-              parentEmail:
-                student.parentEmail ??
-                `${student.parentName.toLowerCase().replace(/[^a-z]/g, "")}@mail.com`,
-              studentName: student.name,
-              studentId: student.id,
-              studentGrade: student.section ?? "Grade 7A",
-              avatarColor: ["blue", "teal", "purple", "amber", "green"][
-                Math.floor(Math.random() * 5)
-              ],
-              unread: false,
-              lastTime: "Just now",
-              preview: "Draft message thread created...",
-              studentSnapshot: {
-                overallAvg: Math.round(student.performance ?? 0),
-                attendance: 95,
-                parentEngagement: 50,
-                recentHomework: [],
-              },
-              messages: [
-                {
-                  id: `M-${Date.now()}`,
-                  sender: "teacher" as const,
-                  text: `Hello, I wanted to reach out regarding ${student.name}'s attendance / study.`,
-                  time: new Date().toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }),
-                },
-              ],
-            };
-
-            setMessageThreads((prev) => [newThread, ...prev]);
-            setActiveMessageThreadId(newThreadId);
-          }
-          setActiveTab("Messages");
-        }
+      const existingThread = messageThreads.find(
+        (t) => t.studentId === studentId,
+      );
+      if (existingThread) {
+        setActiveMessageThreadId(existingThread.id);
+        setActiveTab("Messages");
+        return;
       }
+
+      const student = students.find((s) => s.id === studentId);
+      if (!student) return;
+
+      (async () => {
+        let parentName = student.parentName;
+        let parentPhone = student.parentPhone;
+        let parentEmail = student.parentEmail;
+
+        try {
+          const orgInfo = await ensureTeacherOrgBranch();
+          if (orgInfo.branchId) {
+            const parents = await getParentsByBranch(orgInfo.branchId);
+            const match = parents.find((p) =>
+              p.studentIds.includes(studentId),
+            );
+            if (match) {
+              parentName = match.parentName || parentName;
+              parentPhone = match.parentPhone || parentPhone;
+              parentEmail = match.parentEmail || parentEmail;
+            }
+          }
+        } catch {
+          // fallback to student data
+        }
+
+        const pInitials =
+          parentName
+            .split(" ")
+            .map((n) => n[0])
+            .join("") || "P";
+        const newThreadId = `THR-${Date.now()}`;
+        const newThread: Thread = {
+          id: newThreadId,
+          parentName,
+          parentInitials: pInitials,
+          parentPhone,
+          parentEmail,
+          studentName: student.name,
+          studentId: student.id,
+          studentGrade: student.section ?? "Grade 7A",
+          avatarColor: ["blue", "teal", "purple", "amber", "green"][
+            Math.floor(Math.random() * 5)
+          ],
+          unread: false,
+          lastTime: "Just now",
+          preview: "New conversation started",
+          studentSnapshot: {
+            overallAvg: Math.round(student.performance ?? 0),
+            attendance: 95,
+            parentEngagement: 50,
+            recentHomework: [],
+          },
+          messages: [],
+        };
+
+        setMessageThreads((prev) => [newThread, ...prev]);
+        setActiveMessageThreadId(newThreadId);
+        setActiveTab("Messages");
+      })();
     };
     window.addEventListener("send_student_sms", handleSendStudentSms);
     return () =>
@@ -1197,6 +1313,7 @@ export default function App() {
   if (!authChecked) return null;
 
   return (
+    <HomeroomProvider isHomeroomTeacher={isHomeroomTeacher}>
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-blue-100 selection:text-[#1A237E]">
       {/* A. Left Sidebar */}
       <aside
@@ -1231,7 +1348,7 @@ export default function App() {
               </div>
               <div className="flex flex-col min-w-0">
                 <h2 className="text-[12px] font-black uppercase tracking-tight text-slate-800 truncate leading-tight">
-                  EDUGOV School
+                  {schoolName}
                 </h2>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                   Academic Portal
@@ -1391,7 +1508,7 @@ export default function App() {
                 {teacherProfile?.name ?? "Sara Kassa"}
               </p>
               <p className="text-[10px] font-medium text-slate-400">
-                {teacherProfile?.role ?? "Primary Teacher"}
+                {isHomeroomTeacher ? "Homeroom Teacher" : "Teacher"}
               </p>
             </div>
             <ChevronDown size={14} className="text-slate-400" />
@@ -1521,19 +1638,26 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                     <MetricCard
                       label="Total Students"
-                      value="42"
-                      subtitle="+2 ACTIVE"
+                      value={String(sectionStudentCount)}
+                      subtitle="ENROLLED"
                       icon={Users}
                     />
                     <MetricCard
                       label="Avg Performance"
-                      value="82.4"
-                      subtitle="+4.5%"
+                      value={(() => {
+                        if (studentAnalytics.length === 0) return "—";
+                        const avg = studentAnalytics.reduce(
+                          (s, a) => s + a.overallAvg,
+                          0,
+                        ) / studentAnalytics.length;
+                        return avg.toFixed(1);
+                      })()}
+                      subtitle={`OVER ${studentAnalytics.length} STUDENTS`}
                       icon={GraduationCap}
                     />
                     <MetricCard
                       label="Tasks Due"
-                      value="03"
+                      value={String(taskCount)}
                       subtitle="PENDING"
                       icon={FileText}
                     />
@@ -1628,6 +1752,7 @@ export default function App() {
               globalGrade={globalGrade}
               globalSection={globalSection}
               activeSection={activeSection}
+              isHomeroomTeacher={isHomeroomTeacher}
             />
           )}
           {activeTab === "Tasks" && (
@@ -1777,7 +1902,10 @@ export default function App() {
 
                   {/* View Partition Toggles */}
                   <div className="flex items-center bg-slate-50 p-1 rounded-xl overflow-x-auto no-scrollbar">
-                    {(["Day", "Week", "Month"] as const).map((mode) => (
+                    {(isAttendanceReadOnly
+                      ? (["Day"] as const)
+                      : (["Day", "Week", "Month"] as const)
+                    ).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setAttendanceView(mode)}
@@ -1878,9 +2006,9 @@ export default function App() {
                     {attendanceView === "Day" && (
                       <button
                         onClick={markAllPresent}
-                        disabled={isSelectedDateReadOnly}
+                        disabled={cantEdit}
                         className={`px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 transition-all shadow-sm flex items-center gap-2 w-full sm:w-auto ${
-                          isSelectedDateReadOnly
+                          cantEdit
                             ? "opacity-50 cursor-not-allowed"
                             : "hover:bg-emerald-600 hover:text-white"
                         }`}
@@ -2045,18 +2173,18 @@ export default function App() {
 
                           {attendanceView === "Day" && (
                             <div
-                              className="flex items-center gap-2 overflow-x-auto no-scrollbar"
+                              className={`flex items-center gap-2 overflow-x-auto no-scrollbar ${cantEdit ? "pointer-events-none opacity-70" : ""}`}
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
                                 onClick={() =>
                                   updateAttendance(student.id, "present")
                                 }
-                                disabled={isSelectedDateReadOnly}
+                                disabled={cantEdit}
                                 className={`flex-1 sm:flex-none px-4 md:px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${
                                   status === "present"
                                     ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-600/20"
-                                    : isSelectedDateReadOnly
+                                    : cantEdit
                                       ? "bg-white text-emerald-600 border-slate-100 opacity-50 cursor-not-allowed"
                                       : "bg-white text-emerald-600 border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/50"
                                 }`}
@@ -2067,11 +2195,11 @@ export default function App() {
                                 onClick={() =>
                                   updateAttendance(student.id, "absent")
                                 }
-                                disabled={isSelectedDateReadOnly}
+                                disabled={cantEdit}
                                 className={`flex-1 sm:flex-none px-4 md:px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap ${
                                   status === "absent"
                                     ? "bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/20"
-                                    : isSelectedDateReadOnly
+                                    : cantEdit
                                       ? "bg-white text-slate-400 border-slate-100 opacity-50 cursor-not-allowed"
                                       : "bg-white text-slate-400 border-slate-100 hover:border-red-200 hover:bg-red-50/50"
                                 }`}
@@ -2085,7 +2213,7 @@ export default function App() {
                                       ? status
                                       : ""
                                   }
-                                  disabled={isSelectedDateReadOnly}
+                                  disabled={cantEdit}
                                   onChange={(e) => {
                                     const next = e.target.value as
                                       | ""
@@ -2106,7 +2234,7 @@ export default function App() {
                                       ? "bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/20"
                                       : status === "excused"
                                         ? "bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-900/20"
-                                        : isSelectedDateReadOnly
+                                        : cantEdit
                                           ? "bg-white text-slate-400 border-slate-100 opacity-50 cursor-not-allowed"
                                           : "bg-white text-slate-400 border-slate-100 hover:border-slate-200 hover:bg-slate-50/50"
                                   }`}
@@ -2141,9 +2269,9 @@ export default function App() {
                                     return { ...prev, [student.id]: existing };
                                   });
                                 }}
-                                disabled={isSelectedDateReadOnly}
+                                disabled={cantEdit}
                                 className={`flex-1 sm:flex-none px-4 md:px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap flex items-center justify-center gap-2 ${
-                                  isSelectedDateReadOnly
+                                  cantEdit
                                     ? "bg-white text-slate-300 border-slate-100 opacity-50 cursor-not-allowed"
                                     : attendance[selectedDate.toDateString()]?.[student.id]
                                           ?.remarks
@@ -2351,7 +2479,7 @@ export default function App() {
                     })}
                 </div>
 
-                {(attendanceView !== "Day" || isSelectedDateToday) && (
+                {!isAttendanceReadOnly && (attendanceView !== "Day" || isSelectedDateToday) && (
                   <div className="p-8 bg-slate-50/50 border-t border-slate-50">
                     <button
                       onClick={attendanceView !== "Day" ? handleExportCSV : undefined}
@@ -2768,5 +2896,6 @@ export default function App() {
         }
       `}</style>
     </div>
+    </HomeroomProvider>
   );
 }

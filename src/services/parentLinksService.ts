@@ -44,6 +44,11 @@ export interface ParentLink {
   parent_email: string;
 }
 
+function buildFullName(ud: ParentLinkApi["parent_details"]["user_details"]): string {
+  const parts = [ud.name, ud.father_name, ud.grandfather_name].filter(Boolean);
+  return parts.join(" ") || "";
+}
+
 function mapParentLink(api: ParentLinkApi): ParentLink {
   const ud = api.parent_details?.user_details;
   return {
@@ -52,7 +57,7 @@ function mapParentLink(api: ParentLinkApi): ParentLink {
     parent: api.parent,
     relationship_type: api.relationship_type,
     is_primary_contact: api.is_primary_contact,
-    parent_name: ud?.name ?? "",
+    parent_name: ud ? buildFullName(ud) : "",
     parent_phone: ud?.phone_number ?? api.parent_details?.secondary_phone_number ?? "",
     parent_email: ud?.email ?? "",
   };
@@ -78,8 +83,106 @@ const MOCK_PARENT_LINKS: ParentLink[] = [
   },
 ];
 
+// --- New parent API types ---
+
+export interface ParentProfileApi {
+  id: string;
+  user: string;
+  branches: string[];
+  secondary_phone_number?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  is_active: boolean;
+  user_details: {
+    id: string;
+    name: string;
+    father_name?: string;
+    grandfather_name?: string;
+    email?: string | null;
+    phone_number?: string;
+    address?: string;
+    role?: string;
+  };
+  student_details?: Array<Record<string, unknown>>;
+}
+
+interface ParentListResponse {
+  count: number;
+  next?: string | null;
+  previous?: string | null;
+  results: ParentProfileApi[];
+}
+
+export interface BranchParent {
+  parentId: string;
+  userId: string;
+  parentName: string;
+  parentPhone: string;
+  parentEmail: string;
+  studentIds: string[];
+}
+
+function buildParentFullName(ud: ParentProfileApi["user_details"]): string {
+  const parts = [ud.name, ud.father_name, ud.grandfather_name].filter(Boolean);
+  return parts.join(" ") || "";
+}
+
+function mapBranchParent(api: ParentProfileApi): BranchParent {
+  const ud = api.user_details;
+  const studentIds: string[] = [];
+  if (api.student_details) {
+    for (const sd of api.student_details) {
+      if (typeof sd === "string") {
+        studentIds.push(sd);
+      } else if (sd && typeof sd === "object" && "id" in sd) {
+        studentIds.push((sd as { id: string }).id);
+      }
+    }
+  }
+  return {
+    parentId: api.id,
+    userId: api.user,
+    parentName: ud ? buildParentFullName(ud) : "",
+    parentPhone: ud?.phone_number ?? api.secondary_phone_number ?? "",
+    parentEmail: ud?.email ?? "",
+    studentIds,
+  };
+}
+
 /**
- * Fetch parent links for a student.
+ * Fetch parents for a branch.
+ * GET /api/parents/?branch=<branchId>
+ */
+export async function getParentsByBranch(
+  branchId: string,
+): Promise<BranchParent[]> {
+  if (IS_MOCK) {
+    return MOCK_PARENT_LINKS.map((p) => ({
+      parentId: p.parent,
+      userId: p.parent,
+      parentName: p.parent_name,
+      parentPhone: p.parent_phone,
+      parentEmail: p.parent_email,
+      studentIds: [p.student],
+    }));
+  }
+
+  const params = new URLSearchParams();
+  params.set("branch", branchId);
+
+  try {
+    const data = await request<ParentListResponse>(
+      "GET",
+      `/api/parents/?${params.toString()}`,
+    );
+    return (data.results ?? []).map(mapBranchParent);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch parent links for a student (legacy).
  * GET /api/parent-links/?student=<studentId>
  */
 export async function getParentLinks(

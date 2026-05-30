@@ -1127,37 +1127,7 @@ const HomeworksModule = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 mt-2 shadow-sm">
-                    <div className="space-y-0.5">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        Parent visibility
-                      </p>
-                      <p
-                        className={`text-[10px] font-bold ${selectedEntry.parentVisible ? "text-emerald-500" : "text-slate-400"}`}
-                      >
-                        {selectedEntry.parentVisible
-                          ? "Currently visible to parents"
-                          : "Hidden from parents"}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() =>
-                        handleToggleParentVisible(selectedEntry.id)
-                      }
-                      className={`w-10 h-6 rounded-full transition-colors relative flex items-center px-1 ${
-                        selectedEntry.parentVisible
-                          ? "bg-[#1a237e]"
-                          : "bg-slate-200"
-                      }`}
-                    >
-                      <motion.div
-                        animate={{ x: selectedEntry.parentVisible ? 16 : 0 }}
-                        className="w-4 h-4 bg-white rounded-full shadow-sm"
-                      />
-                    </button>
-                  </div>
                 </div>
-
                 <div className="flex-1 overflow-y-auto max-h-[calc(100vh-280px)] custom-scrollbar">
                   <div className="px-6 py-4 border-b border-slate-50 flex items-center justify-between bg-white sticky top-0 z-20">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">

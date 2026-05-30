@@ -66,3 +66,5 @@ export * from "./userProfileStore";
 export * from "./attendanceService";
 export * from "./assessmentResultsService";
 export * from "./parentLinksService";
+export * from "./homeroomService";
+export * from "./schoolService";
