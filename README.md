@@ -1,4 +1,4 @@
-# Ethio-Global Academy — Teacher Dashboard
+# Teacher Dashboard for Kelem
 
 A single-page application for teachers to manage classes, track student performance, take attendance, communicate with parents, and oversee academic activities at Ethio-Global Academy.
 
