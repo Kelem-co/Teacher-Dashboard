@@ -5,8 +5,8 @@
   <p><em>Kelem Academic Management Platform</em></p>
   <br>
   <p>
-    <strong>Course:</strong> Software Engineering Final Year Project<br>
-    <strong>Institution:</strong> Addis Ababa Science and Technology University
+    Software Engineering Final Year Project<br>
+    Addis Ababa Science and Technology University
   </p>
   <br>
   <p>
@@ -329,7 +329,6 @@ This project was developed as a Software Engineering final year project by the f
 <div align="center">
   <p>
     <strong>Addis Ababa Science and Technology University</strong><br>
-    Faculty of Electrical and Computer Engineering<br>
     Department of Software Engineering
   </p>
   <p>
