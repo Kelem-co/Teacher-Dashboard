@@ -8,3 +8,12 @@ coverage/
 .env*
 !.env.example
 tsconfig.tsbuildinfo
+
+# Editor & tooling
+.vscode/
+.kiro/
+.opencode/
+.mcp.json
+.nvmrc
+docs/
+metadata.json
